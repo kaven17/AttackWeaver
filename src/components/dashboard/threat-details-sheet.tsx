@@ -177,7 +177,7 @@ export function ThreatDetailsSheet({
   const header = (
     <div className='flex flex-col gap-1.5'>
       <div className="flex items-center gap-2">
-        <RiskScoreBadge score={threat.riskScore ?? 0} />
+        <RiskScoreBadge score={threat.riskScore ?? null} />
         <h2 className="text-lg font-semibold">{threat.event.type}</h2>
       </div>
       <div className="text-sm text-muted-foreground">
@@ -202,10 +202,10 @@ export function ThreatDetailsSheet({
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
         <SheetHeader className='p-6 pb-4'>
             <SheetTitle asChild>{header}</SheetTitle>
-            <SheetDescription className='sr-only'>
-                Detailed view of a security threat.
-            </SheetDescription>
         </SheetHeader>
+        <SheetDescription className='sr-only'>
+            Detailed view of a security threat.
+        </SheetDescription>
         <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
     </Sheet>
