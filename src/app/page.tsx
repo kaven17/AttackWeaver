@@ -1,7 +1,13 @@
 import { DashboardPage } from '@/components/dashboard/dashboard-page';
+import { Hero } from '@/components/layout/hero';
 
 export default async function Home() {
-  // The main dashboard now receives an empty array, as data will be handled
-  // on the client-side after being processed from the new /ingest page.
-  return <DashboardPage initialThreats={[]} />;
+  return (
+    <>
+      <Hero />
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <DashboardPage initialThreats={[]} />
+      </div>
+    </>
+  );
 }

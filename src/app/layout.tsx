@@ -2,12 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
-import {
-  Sidebar,
-  SidebarInset,
-  SidebarProvider,
-} from '@/components/ui/sidebar';
-import { SidebarContent } from '@/components/layout/sidebar-content';
+import { Navbar } from '@/components/layout/navbar';
 
 export const metadata: Metadata = {
   title: 'ThreatLens-X',
@@ -37,13 +32,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={cn('font-body antialiased')}>
-        <SidebarProvider>
-          <Sidebar>
-            <SidebarContent />
-          </Sidebar>
-          <SidebarInset>{children}</SidebarInset>
-        </SidebarProvider>
+      <body className={cn('font-body antialiased bg-background')}>
+        <Navbar />
+        <main>{children}</main>
         <Toaster />
       </body>
     </html>
