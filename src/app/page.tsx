@@ -6,7 +6,7 @@ export default async function Home() {
     <>
       <Hero />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <DashboardPage initialThreats={[]} />
+        <DashboardPage />
       </div>
     </>
   );

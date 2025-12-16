@@ -7,7 +7,7 @@ import {
   AvatarImage,
 } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { LayoutDashboard, ShieldHalf, UploadCloud } from 'lucide-react';
+import { LayoutDashboard, ShieldHalf, UploadCloud, Bot } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';

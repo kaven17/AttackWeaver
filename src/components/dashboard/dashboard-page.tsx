@@ -1,58 +1,19 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { ProcessedThreat, AnalyzeThreatOutput } from '@/lib/types';
+import { useState, useMemo, useEffect } from 'react';
+import type { ProcessedThreat } from '@/lib/types';
 import { OverviewCards } from './overview-cards';
 import { ThreatList } from './threat-list';
 import { ThreatDetailsSheet } from './threat-details-sheet';
 import { Card } from '../ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { analyzeThreat } from '@/ai/flows/analyze-threat-flow';
 import { Button } from '../ui/button';
 import { UploadCloud } from 'lucide-react';
 import Link from 'next/link';
 
-function generateStaticAnalysis(threat: ProcessedThreat): AnalyzeThreatOutput {
-  const { ruleBasedSeverity, device, location } = threat;
-  
-  let contextualScore = (device.isNovel ? 20 : 0) + (location.isNovel ? 15 : 0);
-  if (threat.event.type === 'Privilege Escalation') contextualScore += 10;
 
-  const finalScore = Math.min(95, (ruleBasedSeverity * 10) + contextualScore);
-  
-  let explanation = `This is a **${threat.event.type}** event by user **${threat.user.name}**. `;
-  explanation += `The initial rule-based severity was ${ruleBasedSeverity}/10. `;
-  
-  const contextFlags = [];
-  if (device.isNovel) contextFlags.push("a novel device");
-  if (location.isNovel) contextFlags.push("a new location");
-  if (contextFlags.length > 0) {
-    explanation += `The risk score was increased due to context flags: ${contextFlags.join(' and ')}. `;
-  }
-  explanation += "This static analysis provides a preliminary assessment. For a deeper, AI-powered analysis of behavioral patterns and event correlation, run the full ThreatLens AI."
-
-  return {
-    riskScore: finalScore,
-    detailedExplanation: explanation,
-    behavioralAnomalyScore: 0,
-    riskBreakdown: {
-      ruleBased: ruleBasedSeverity * 10,
-      contextual: contextualScore,
-      behavioral: 0,
-    },
-  };
-}
-
-
-export function DashboardPage({
-  initialThreats,
-}: {
-  initialThreats: ProcessedThreat[];
-}) {
-  const [threats, setThreats] = useState<ProcessedThreat[]>(initialThreats);
+export function DashboardPage() {
+  const [threats, setThreats] = useState<ProcessedThreat[]>([]);
   const [selectedThreatId, setSelectedThreatId] = useState<string | null>(null);
-  const { toast } = useToast();
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const storedThreats = localStorage.getItem('processedThreats');
@@ -60,69 +21,11 @@ export function DashboardPage({
       const parsedThreats: ProcessedThreat[] = JSON.parse(storedThreats);
       const threatsWithScores = parsedThreats.map(t => ({
         ...t,
-        riskScore: t.isAnalyzed ? t.riskScore : t.ruleBasedSeverity * 10,
+        riskScore: t.riskScore ?? t.ruleBasedSeverity * 10,
       })).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
       setThreats(threatsWithScores);
     }
   }, []);
-
-  const handleAnalyzeThreat = useCallback(
-    async (threatId: string) => {
-      const threatToAnalyze = threats.find((t) => t.id === threatId);
-      if (!threatToAnalyze || threatToAnalyze.isAnalyzed) return;
-
-      setIsAnalyzing(true);
-      try {
-        const analysisResult: AnalyzeThreatOutput = await analyzeThreat(threatToAnalyze);
-        const updatedThreat: ProcessedThreat = {
-          ...threatToAnalyze,
-          ...analysisResult,
-          isAnalyzed: true,
-        };
-
-        const updatedThreats = threats.map((t) =>
-          t.id === threatId ? updatedThreat : t
-        ).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
-        
-        setThreats(updatedThreats);
-        localStorage.setItem('processedThreats', JSON.stringify(updatedThreats));
-        
-        toast({
-          title: 'AI Analysis Complete',
-          description: `Enhanced risk assessment for event ${threatId}.`
-        });
-
-      } catch (error) {
-        console.error('Failed to analyze threat:', error);
-        
-        // AI failed, so we generate a static analysis as a fallback
-        const staticAnalysis = generateStaticAnalysis(threatToAnalyze);
-        const updatedThreat: ProcessedThreat = {
-          ...threatToAnalyze,
-          ...staticAnalysis,
-          isAnalyzed: true, // Mark as analyzed to show the static data
-          detailedExplanation: `[AI UNAVAILABLE] ${staticAnalysis.detailedExplanation}`
-        };
-
-        const updatedThreats = threats.map((t) =>
-          t.id === threatId ? updatedThreat : t
-        ).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
-
-        setThreats(updatedThreats);
-        localStorage.setItem('processedThreats', JSON.stringify(updatedThreats));
-
-        toast({
-          variant: 'destructive',
-          title: 'AI Analysis Failed',
-          description:
-            'Displaying static analysis instead. Check your API key or network.',
-        });
-      } finally {
-        setIsAnalyzing(false);
-      }
-    },
-    [threats, toast]
-  );
 
   const selectedThreat = useMemo(
     () => threats.find((t) => t.id === selectedThreatId) || null,
@@ -135,7 +38,7 @@ export function DashboardPage({
   const mediumRiskCount = threats.filter(
     (t) => (t.riskScore || 0) >= 40 && (t.riskScore || 0) < 70
   ).length;
-
+  
   if (threats.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center h-full p-8 text-center bg-card rounded-xl my-10">
@@ -161,7 +64,7 @@ export function DashboardPage({
           Threat Intelligence Dashboard
         </h1>
         <p className="text-muted-foreground mt-2 text-lg">
-          AI-powered analysis of security events. Click an event to analyze.
+          Prioritized security events based on rule-based analysis. Click an event to view details.
         </p>
       </header>
 
@@ -185,8 +88,6 @@ export function DashboardPage({
         onOpenChange={(open) => {
           if (!open) setSelectedThreatId(null);
         }}
-        onAnalyze={handleAnalyzeThreat}
-        isAnalyzing={isAnalyzing}
       />
     </div>
   );
