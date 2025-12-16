@@ -7,7 +7,7 @@ import type { ProcessedThreat, RawEvent } from '@/lib/types';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default async function Home() {
-  const rawEvents = generateMock_Events(5);
+  const rawEvents = generateMockEvents(5);
   // Add a small delay to simulate real-world data fetching
   await sleep(500);
 
