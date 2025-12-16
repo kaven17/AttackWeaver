@@ -14,32 +14,43 @@ export default async function Home() {
   const processedThreats = await Promise.all(
     rawEvents.map(
       async (event: RawEvent): Promise<ProcessedThreat> => {
-        // To avoid rate limiting on the free tier, we'll only run one of the AI flows.
-        // And we'll simulate the others.
-        const behavioralResult = {
-          anomalyScore: Math.random(),
-          explanation: 'Simulated behavioral analysis due to rate limits. No significant deviation detected.'
-        };
+        try {
+          const behavioralResult = {
+            anomalyScore: Math.random(),
+            explanation: 'Simulated behavioral analysis due to rate limits. No significant deviation detected.'
+          };
 
-        const riskResult = await calculateAdaptiveRiskScore({
-          ruleBasedSeverity: event.ruleBasedSeverity,
-          contextualAnomalyScore: event.contextualAnomalyScore,
-          behavioralDeviationScore: behavioralResult.anomalyScore,
-        });
+          const riskResult = await calculateAdaptiveRiskScore({
+            ruleBasedSeverity: event.ruleBasedSeverity,
+            contextualAnomalyScore: event.contextualAnomalyScore,
+            behavioralDeviationScore: behavioralResult.anomalyScore,
+          });
 
-        // Simulate explanation to reduce AI calls
-        const explanationResult = {
-           explanation: `Risk score of ${riskResult.riskScore.toFixed(0)} is based on rule severity (${event.ruleBasedSeverity}), contextual anomalies, and behavioral scores. ${riskResult.explanation}`
-        };
+          // Simulate explanation to reduce AI calls
+          const explanationResult = {
+             explanation: `Risk score of ${riskResult.riskScore.toFixed(0)} is based on rule severity (${event.ruleBasedSeverity}), contextual anomalies, and behavioral scores. ${riskResult.explanation}`
+          };
 
-        return {
-          ...event,
-          riskScore: riskResult.riskScore,
-          riskExplanation: riskResult.explanation,
-          detailedExplanation: explanationResult.explanation,
-          behavioralAnomalyScore: behavioralResult.anomalyScore,
-          behavioralExplanation: behavioralResult.explanation,
-        };
+          return {
+            ...event,
+            riskScore: riskResult.riskScore,
+            riskExplanation: riskResult.explanation,
+            detailedExplanation: explanationResult.explanation,
+            behavioralAnomalyScore: behavioralResult.anomalyScore,
+            behavioralExplanation: behavioralResult.explanation,
+          };
+        } catch (error) {
+            console.error(`Failed to process event ${event.id}:`, error);
+            const fallbackRiskScore = event.ruleBasedSeverity * 10;
+            return {
+                ...event,
+                riskScore: fallbackRiskScore,
+                riskExplanation: "AI analysis failed. Using rule-based severity for risk score.",
+                detailedExplanation: "Could not connect to ThreatLens AI™ for detailed analysis. The service may be temporarily unavailable.",
+                behavioralAnomalyScore: event.contextualAnomalyScore,
+                behavioralExplanation: "Could not connect to CyberDNA™ for behavioral analysis.",
+            };
+        }
       }
     )
   );
