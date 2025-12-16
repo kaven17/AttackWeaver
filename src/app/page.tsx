@@ -41,14 +41,14 @@ export default async function Home() {
           };
         } catch (error) {
             console.error(`Failed to process event ${event.id}:`, error);
-            const fallbackRiskScore = event.ruleBasedSeverity * 10;
+            const fallbackRiskScore = (event.ruleBasedSeverity * 5) + (event.contextualAnomalyScore * 50);
             return {
                 ...event,
                 riskScore: fallbackRiskScore,
-                riskExplanation: "AI analysis failed. Using rule-based severity for risk score.",
-                detailedExplanation: "Could not connect to ThreatLens AI™ for detailed analysis. The service may be temporarily unavailable.",
+                riskExplanation: `AI analysis failed. Fallback score based on rule severity (${event.ruleBasedSeverity}) and contextual anomaly (${event.contextualAnomalyScore.toFixed(2)}).`,
+                detailedExplanation: `Could not connect to ThreatLens AI™ for detailed analysis. The event was a "${event.event.type}" by user "${event.user.name}" from ${event.location.country}.`,
                 behavioralAnomalyScore: event.contextualAnomalyScore,
-                behavioralExplanation: "Could not connect to CyberDNA™ for behavioral analysis.",
+                behavioralExplanation: `Could not connect to CyberDNA™ for behavioral analysis. Initial anomaly score is ${event.contextualAnomalyScore.toFixed(2)}. The user was operating from a ${event.location.isNovel ? 'novel' : 'known'} location and a ${event.device.isNovel ? 'novel' : 'known'} device.`,
             };
         }
       }
