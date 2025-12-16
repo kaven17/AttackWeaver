@@ -1,0 +1,15 @@
+{"timestamp":"2025-02-02T01:47:00Z","source":"auth_service","host":"login-server-1","event":"LOGIN_SUCCESS","user":"Vicky.Bruen89","message":"User login succeeded from IP 192.168.12.45"}
+{"timestamp":"2025-02-02T01:48:12Z","source":"auth_service","host":"login-server-1","event":"LOGIN_FAILED","user":"Vicky.Bruen89","message":"Invalid password from IP 192.168.12.45"}
+{"timestamp":"2025-02-02T02:10:00Z","source":"file_system","host":"app-server-2","event":"FILE_ACCESS","user":"Vicky.Bruen89","message":"Read access to /opt/so_indeed.xlc"}
+{"timestamp":"2025-02-01T14:22:00Z","source":"web_api","host":"api-server-3","event":"API_CALL","user":"Roxanne47","message":"POST /reboot/panel returned 200"}
+{"timestamp":"2025-02-01T03:12:00Z","source":"firewall","host":"gateway-1","event":"NETWORK_CONNECTION","user":null,"message":"Outbound connection to 10.0.0.12:22"}
+{"timestamp":"2025-02-02T03:00:00Z","source":"auth_service","host":"login-server-2","event":"LOGIN_SUCCESS","user":"John.Doe","message":"User login succeeded from IP 203.0.113.10"}
+{"timestamp":"2025-02-02T03:05:00Z","source":"file_system","host":"app-server-1","event":"PRIVILEGE_ESCALATION","user":"John.Doe","message":"User John.Doe attempted to escalate privileges to 'Admin'"}
+{"timestamp":"2025-02-02T04:00:00Z","source":"web_api","host":"api-server-1","event":"API_CALL","user":"Jane.Smith","message":"GET /api/users/all returned 200"}
+{"timestamp":"2025-02-02T04:01:00Z","source":"web_api","host":"api-server-1","event":"API_CALL","user":"Jane.Smith","message":"GET /api/users/all returned 200"}
+{"timestamp":"2025-02-02T04:02:00Z","source":"web_api","host":"api-server-1","event":"API_CALL","user":"Jane.Smith","message":"GET /api/users/all returned 200"}
+{"timestamp":"2025-02-02T09:30:00Z","source":"auth_service","host":"login-server-1","event":"LOGIN_SUCCESS","user":"admin","message":"User login succeeded from IP 198.51.100.2"}
+{"timestamp":"2025-02-02T09:32:00Z","source":"file_system","host":"db-server-1","event":"FILE_ACCESS","user":"admin","message":"Write access to /var/db/customer_data.bak"}
+{"timestamp":"2025-02-01T18:00:00Z","source":"auth_service","host":"login-server-3","event":"LOGIN_FAILED","user":"unknown_user","message":"Failed login attempt for user 'unknown_user' from IP 93.184.216.34"}
+{"timestamp":"2025-02-01T18:01:00Z","source":"auth_service","host":"login-server-3","event":"LOGIN_FAILED","user":"unknown_user","message":"Failed login attempt for user 'unknown_user' from IP 93.184.216.34"}
+{"timestamp":"2025-02-01T18:02:00Z","source":"auth_service","host":"login-server-3","event":"LOGIN_FAILED","user":"unknown_user","message":"Failed login attempt for user 'unknown_user' from IP 93.184.216.34"}

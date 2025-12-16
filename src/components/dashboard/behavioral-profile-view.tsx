@@ -14,13 +14,21 @@ const AnomalyMarker = ({ isAnomaly }: { isAnomaly: boolean }) =>
   ) : null;
 
 export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
+  if (!threat.isAnalyzed || !threat.behavioralBaseline) {
+    return (
+        <div className="text-center text-muted-foreground p-8">
+            <p>Run ThreatLens AI analysis to generate the behavioral profile.</p>
+        </div>
+    );
+  }
+
   const eventHour = new Date(threat.timestamp).getHours();
   const [startHour, endHour] = threat.behavioralBaseline.loginTime.normalRange;
   const isTimeAnomaly = eventHour < startHour || eventHour > endHour;
 
   // Simple check for deviation, in a real app this would be more complex
-  const isResourceAnomaly = threat.behavioralBaseline.resourceAccess.typicalOrder[0] !== '/dashboard';
-  const isApiAnomaly = threat.event.type === 'API Call' && threat.behavioralAnomalyScore > 0.7;
+  const isResourceAnomaly = threat.event.type === 'Resource Access' && threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.5;
+  const isApiAnomaly = threat.event.type === 'API Call' && threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.7;
 
   return (
     <div className="space-y-4">
@@ -53,7 +61,7 @@ export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
                 Typical first resource: <Badge variant="secondary">/dashboard</Badge>
             </div>
             <div className="font-bold text-lg text-foreground">
-                Current first resource: <Badge variant={isResourceAnomaly ? "destructive" : "secondary"}>{threat.behavioralBaseline.resourceAccess.typicalOrder[0]}</Badge>
+                Event Resource: <Badge variant={isResourceAnomaly ? "destructive" : "secondary"}>{threat.event.details.split(' ')[2] || 'N/A'}</Badge>
             </div>
         </CardContent>
       </Card>
@@ -70,7 +78,7 @@ export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
                     Baseline: ~{threat.behavioralBaseline.apiCallFrequency.mean} calls/hr
                 </div>
                 <div className="font-bold text-lg text-foreground">
-                    Current: {isApiAnomaly ? threat.behavioralBaseline.apiCallFrequency.mean + threat.behavioralBaseline.apiCallFrequency.stdDev * 3 : threat.behavioralBaseline.apiCallFrequency.mean - 2} calls/hr (simulated)
+                    Current: {isApiAnomaly ? (threat.behavioralBaseline.apiCallFrequency.mean + threat.behavioralBaseline.apiCallFrequency.stdDev * 3).toFixed(0) : (threat.behavioralBaseline.apiCallFrequency.mean - 2).toFixed(0)} calls/hr (simulated)
                 </div>
             </CardContent>
         </Card>

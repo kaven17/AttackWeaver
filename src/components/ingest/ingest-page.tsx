@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -88,11 +88,33 @@ export function IngestPage({ defaultLogs }: { defaultLogs: string }) {
   const router = useRouter();
   const { toast } = useToast();
 
+  useEffect(() => {
+    // On mount, if defaultLogs is empty, try to fetch from the new file.
+    if (!defaultLogs) {
+      fetch('/data/logs.jsonl')
+        .then(response => response.text())
+        .then(text => {
+          setLogs(text);
+        })
+        .catch(err => {
+          console.error("Could not load default logs:", err);
+        });
+    }
+  }, [defaultLogs]);
+
+
   const handleProcess = () => {
     setIsProcessing(true);
     try {
       const logLines = logs.trim().split('\n');
-      const parsedLogs: RawLog[] = logLines.map(line => JSON.parse(line));
+      const parsedLogs: RawLog[] = logLines.map(line => {
+        try {
+          return JSON.parse(line);
+        } catch (e) {
+          console.error('Failed to parse line:', line);
+          return null;
+        }
+      }).filter((log): log is RawLog => log !== null);
       
       const enrichedEvents = parsedLogs.map(parseAndEnrich);
       
@@ -136,7 +158,7 @@ export function IngestPage({ defaultLogs }: { defaultLogs: string }) {
         <CardHeader>
           <CardTitle>Ingest & Process Logs</CardTitle>
           <CardDescription>
-            Paste raw security logs in JSON Lines (.jsonl) format below. Each line should be a single JSON object.
+            Paste raw security logs in JSON Lines (.jsonl) format below, or use the pre-loaded sample data.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -146,7 +168,7 @@ export function IngestPage({ defaultLogs }: { defaultLogs: string }) {
             className="h-96 font-code text-xs"
             placeholder='{ "timestamp": "...", "source": "...", ... }'
           />
-          <Button onClick={handleProcess} disabled={isProcessing}>
+          <Button onClick={handleProcess} disabled={isProcessing || !logs}>
             {isProcessing ? 'Processing...' : 'Process Logs'}
           </Button>
         </CardContent>
