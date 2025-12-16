@@ -9,17 +9,19 @@ import {
 import type { ProcessedThreat } from '@/lib/types';
 import { Separator } from '../ui/separator';
 import { RiskScoreBadge } from './risk-score-badge';
-import { CheckCircle, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, XCircle, Zap, Bot } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BehavioralProfileView } from './behavioral-profile-view';
 import { ContextFlags } from './context-flags';
+import { Skeleton } from '../ui/skeleton';
 
 function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
   return (
@@ -60,7 +62,7 @@ function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
               </span>
             </li>
           )}
-          {threat.behavioralAnomalyScore > 0.5 && (
+          {threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.5 && (
             <li className="flex items-start gap-2">
               <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
               <span>
@@ -78,7 +80,17 @@ function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
   );
 }
 
-function ThreatDetailsContent({ threat, onFeedback }: { threat: ProcessedThreat; onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void; }) {
+function ThreatDetailsContent({ 
+  threat, 
+  onFeedback,
+  onAnalyze,
+  isAnalyzing
+}: { 
+  threat: ProcessedThreat; 
+  onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void;
+  onAnalyze: (threatId: string) => void;
+  isAnalyzing: boolean;
+}) {
 
   return (
     <>
@@ -89,23 +101,36 @@ function ThreatDetailsContent({ threat, onFeedback }: { threat: ProcessedThreat;
             <TabsTrigger value="behavior">Behavior Profile</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="mt-4 space-y-6">
-            <ThreatExplanationCard threat={threat} />
-
-            <Separator />
-            
-            <ContextFlags threat={threat} />
-
-            <Separator />
-            
-            <div className="space-y-2">
-                <h3 className="font-semibold text-foreground">
-                    ThreatLens AI™ Explanation
-                </h3>
-                <p className="rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
-                    {threat.detailedExplanation}
-                </p>
-            </div>
-            
+            {!threat.isAnalyzed ? (
+              <Card className="text-center p-6 flex flex-col items-center">
+                <Bot className="h-12 w-12 text-muted-foreground" />
+                <CardTitle className="mt-4 text-xl">Ready for Analysis</CardTitle>
+                <CardDescription className="mt-2">
+                  This event has not been analyzed by ThreatLens AI.
+                </CardDescription>
+                <Button className="mt-4" onClick={() => onAnalyze(threat.id)} disabled={isAnalyzing}>
+                  {isAnalyzing ? "Analyzing..." : "Analyze with ThreatLens AI"}
+                </Button>
+              </Card>
+            ) : (
+              <>
+                <ThreatExplanationCard threat={threat} />
+                <Separator />
+                <ContextFlags threat={threat} />
+                <Separator />
+                <div className="space-y-2">
+                    <h3 className="font-semibold text-foreground">
+                        ThreatLens AI™ Explanation
+                    </h3>
+                    <p className="rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
+                        {isAnalyzing 
+                          ? <Skeleton className="h-20" /> 
+                          : threat.detailedExplanation || "No explanation available."
+                        }
+                    </p>
+                </div>
+              </>
+            )}
           </TabsContent>
           <TabsContent value="behavior" className="mt-4">
             <BehavioralProfileView threat={threat} />
@@ -119,6 +144,7 @@ function ThreatDetailsContent({ threat, onFeedback }: { threat: ProcessedThreat;
             variant="outline"
             className="w-full"
             onClick={() => onFeedback(threat, false)}
+            disabled={!threat.isAnalyzed}
           >
             <XCircle /> Mark as Benign
           </Button>
@@ -126,6 +152,7 @@ function ThreatDetailsContent({ threat, onFeedback }: { threat: ProcessedThreat;
             variant="destructive"
             className="w-full"
             onClick={() => onFeedback(threat, true)}
+            disabled={!threat.isAnalyzed}
           >
             <CheckCircle /> Confirm Threat
           </Button>
@@ -141,13 +168,15 @@ export function ThreatDetailsSheet({
   open,
   onOpenChange,
   isSheet = true,
+  onAnalyze,
+  isAnalyzing,
 }: ThreatDetailsSheetProps) {
   if (!threat) return null;
 
   const header = (
     <div className='flex flex-col gap-1.5'>
       <div className="flex items-center gap-2">
-        <RiskScoreBadge score={threat.riskScore} />
+        <RiskScoreBadge score={threat.riskScore ?? 0} />
         <h2 className="text-lg font-semibold">{threat.event.type}</h2>
       </div>
       <div className="text-sm text-muted-foreground">
@@ -162,7 +191,7 @@ export function ThreatDetailsSheet({
           <CardHeader>
             {header}
           </CardHeader>
-          <ThreatDetailsContent threat={threat} onFeedback={onFeedback} />
+          <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </Card>
     );
   }
@@ -173,7 +202,7 @@ export function ThreatDetailsSheet({
         <SheetHeader className='p-6 pb-4'>
             <SheetTitle asChild>{header}</SheetTitle>
         </SheetHeader>
-        <ThreatDetailsContent threat={threat} onFeedback={onFeedback} />
+        <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
     </Sheet>
   );
@@ -184,4 +213,6 @@ type ThreatDetailsSheetProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     isSheet?: boolean;
+    onAnalyze: (threatId: string) => void;
+    isAnalyzing: boolean;
 };

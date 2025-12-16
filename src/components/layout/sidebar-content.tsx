@@ -15,10 +15,12 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { LayoutDashboard, ShieldHalf } from 'lucide-react';
+import { LayoutDashboard, ShieldHalf, UploadCloud } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 export function SidebarContent() {
   const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
+  const pathname = usePathname();
 
   return (
     <>
@@ -35,10 +37,18 @@ export function SidebarContent() {
       <Content className="p-4 pt-0">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive>
+            <SidebarMenuButton asChild isActive={pathname === '/'}>
               <Link href="/">
                 <LayoutDashboard />
                 <span>Dashboard</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/ingest'}>
+              <Link href="/ingest">
+                <UploadCloud />
+                <span>Ingest Logs</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
