@@ -107,7 +107,7 @@ function ThreatDetailsContent({
         <Tabs defaultValue="overview">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="behavior">Behavior Profile</TabsTrigger>
+            {threat.behavioralBaseline && <TabsTrigger value="behavior">Behavior Profile</TabsTrigger>}
           </TabsList>
           <TabsContent value="overview" className="mt-4 space-y-6">
             {!threat.isAnalyzed ? (
@@ -141,9 +141,11 @@ function ThreatDetailsContent({
               </>
             )}
           </TabsContent>
-          <TabsContent value="behavior" className="mt-4">
-            <BehavioralProfileView threat={threat} />
-          </TabsContent>
+          {threat.behavioralBaseline && (
+            <TabsContent value="behavior" className="mt-4">
+              <BehavioralProfileView threat={threat} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

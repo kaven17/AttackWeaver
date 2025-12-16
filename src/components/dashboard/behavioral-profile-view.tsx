@@ -14,6 +14,7 @@ const AnomalyMarker = ({ isAnomaly }: { isAnomaly: boolean }) =>
   ) : null;
 
 export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
+  // Gracefully handle cases where behavioral baseline is not available
   if (!threat.isAnalyzed || !threat.behavioralBaseline) {
     return (
         <div className="text-center text-muted-foreground p-8">
