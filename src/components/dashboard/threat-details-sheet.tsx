@@ -95,7 +95,21 @@ function ThreatDetailsContent({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto p-6">
+      <SheetHeader className='p-6 pb-4'>
+        <SheetTitle asChild>
+            <div className='flex flex-col gap-1.5 text-left'>
+              <div className="flex items-center gap-2">
+                <RiskScoreBadge score={threat.riskScore ?? null} />
+                <h2 className="text-lg font-semibold">{threat.event.type}</h2>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {new Date(threat.timestamp).toLocaleString()}
+              </div>
+            </div>
+        </SheetTitle>
+      </SheetHeader>
+
+      <div className="flex-1 overflow-y-auto p-6 pt-0">
         <Tabs defaultValue="overview">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -168,44 +182,14 @@ export function ThreatDetailsSheet({
   onFeedback,
   open,
   onOpenChange,
-  isSheet = true,
   onAnalyze,
   isAnalyzing,
 }: ThreatDetailsSheetProps) {
   if (!threat) return null;
 
-  const header = (
-    <div className='flex flex-col gap-1.5'>
-      <div className="flex items-center gap-2">
-        <RiskScoreBadge score={threat.riskScore ?? null} />
-        <h2 className="text-lg font-semibold">{threat.event.type}</h2>
-      </div>
-      <div className="text-sm text-muted-foreground">
-        {new Date(threat.timestamp).toLocaleString()}
-      </div>
-    </div>
-  );
-
-  if (!isSheet) {
-    return (
-      <Card className="h-full flex flex-col">
-          <CardHeader>
-            {header}
-          </CardHeader>
-          <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
-      </Card>
-    );
-  }
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
-        <SheetHeader className='p-6 pb-4'>
-            <SheetTitle asChild>{header}</SheetTitle>
-        </SheetHeader>
-        <SheetDescription className='sr-only'>
-            Detailed view of a security threat.
-        </SheetDescription>
         <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
     </Sheet>
@@ -216,7 +200,6 @@ type ThreatDetailsSheetProps = {
     onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    isSheet?: boolean;
     onAnalyze: (threatId: string) => void;
     isAnalyzing: boolean;
 };

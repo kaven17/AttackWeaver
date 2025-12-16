@@ -5,13 +5,28 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { RawLog, ProcessedThreat, EnrichedEvent } from '@/lib/types';
+import { RawLog, ProcessedThreat, EnrichedEvent, UserBehaviorBaseline } from '@/lib/types';
 import { faker } from '@faker-js/faker';
+
+const userBaselines: Record<string, UserBehaviorBaseline> = {};
+
+function getOrCreateBaseline(userId: string): UserBehaviorBaseline {
+    if (!userBaselines[userId]) {
+        userBaselines[userId] = {
+            loginTime: { normalRange: [faker.number.int({ min: 7, max: 9 }), faker.number.int({ min: 17, max: 19 })] },
+            resourceAccess: { typicalOrder: ['/dashboard', '/reports', '/settings'] },
+            apiCallFrequency: { mean: faker.number.int({ min: 10, max: 50 }), stdDev: faker.number.int({ min: 2, max: 8 }) }
+        };
+    }
+    return userBaselines[userId];
+}
+
 
 function parseAndEnrich(log: RawLog): EnrichedEvent {
     const id = faker.string.uuid();
     let eventType: EnrichedEvent['event']['type'] = 'Unknown';
     let severity = 1;
+    let userRole = 'User';
 
     // Very basic parsing logic, this would be much more sophisticated
     if (log.event.includes('LOGIN_SUCCESS')) {
@@ -29,20 +44,24 @@ function parseAndEnrich(log: RawLog): EnrichedEvent {
     } else if (log.event.includes('PRIVILEGE_ESCALATION')) {
         eventType = 'Privilege Escalation';
         severity = 9;
+        userRole = faker.helpers.arrayElement(['Admin', 'Developer']);
     } else if (log.event.includes('NETWORK_CONNECTION')) {
         eventType = 'Network Connection';
         severity = 2;
     }
 
     const ipMatch = log.message.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+    const userId = log.user || 'system';
+    const behavioralBaseline = getOrCreateBaseline(userId);
 
     return {
         id,
         rawLog: log,
         timestamp: log.timestamp,
         user: {
-            id: log.user || 'N/A',
-            name: log.user || 'system',
+            id: userId,
+            name: userId,
+            role: userRole,
         },
         device: {
             id: log.host,
@@ -58,6 +77,7 @@ function parseAndEnrich(log: RawLog): EnrichedEvent {
             details: log.message,
         },
         ruleBasedSeverity: severity,
+        behavioralBaseline,
     };
 }
 

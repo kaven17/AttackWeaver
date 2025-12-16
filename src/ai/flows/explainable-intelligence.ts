@@ -10,43 +10,48 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { EnrichedEvent } from '@/lib/types';
 
-const ExplanationInputSchema = z.object({
-  eventDescription: z.string().describe('A description of the flagged event.'),
-  riskScore: z.number().describe('The risk score (0-100) associated with the event.'),
-  severity: z.string().describe('The severity of the event (e.g., low, medium, high).'),
-  contextualAnomalies: z.string().describe('Contextual anomalies observed during the event.'),
-  behavioralDeviations: z.string().describe('Behavioral deviations observed during the event.'),
+
+export const ExplanationInputSchema = z.object({
+  event: z.custom<EnrichedEvent>(),
+  riskScore: z.number(),
+  behavioralAnomalyScore: z.number(),
+  behavioralExplanation: z.string(),
 });
+
 export type ExplanationInput = z.infer<typeof ExplanationInputSchema>;
 
-const ExplanationOutputSchema = z.object({
-  explanation: z.string().describe('A human-readable explanation of the event and its risk score.'),
+export const ExplanationOutputSchema = z.object({
+  detailedExplanation: z.string().describe('A detailed, human-readable explanation of the event and its risk score.'),
 });
 export type ExplanationOutput = z.infer<typeof ExplanationOutputSchema>;
 
-export async function generateExplanation(input: ExplanationInput): Promise<ExplanationOutput> {
-  return explainableIntelligenceFlow(input);
-}
 
 const prompt = ai.definePrompt({
   name: 'explainableIntelligencePrompt',
   input: {schema: ExplanationInputSchema},
   output: {schema: ExplanationOutputSchema},
   prompt: `You are a security expert explaining a flagged event to a security analyst.
-
   Given the following information about the event, generate a clear and concise explanation of why the event was flagged and its associated risk score.
+  
+  Event:
+  - Description: {{{event.event.details}}}
+  - User: {{{event.user.name}}}
+  - Location: {{{event.location.country}}}
+  - Device Novelty: {{{event.device.isNovel}}}
+  - Location Novelty: {{{event.location.isNovel}}}
+  
+  Analysis:
+  - Risk Score: {{{riskScore}}}
+  - Behavioral Anomaly Score: {{{behavioralAnomalyScore}}}
+  - Behavioral Explanation: {{{behavioralExplanation}}}
 
-  Event Description: {{{eventDescription}}}
-  Risk Score: {{{riskScore}}}
-  Severity: {{{severity}}}
-  Contextual Anomalies: {{{contextualAnomalies}}}
-  Behavioral Deviations: {{{behavioralDeviations}}}
-
-  Explanation:`,
+  Generate the 'detailedExplanation' field.
+  `,
 });
 
-const explainableIntelligenceFlow = ai.defineFlow(
+export const explainableIntelligenceFlow = ai.defineFlow(
   {
     name: 'explainableIntelligenceFlow',
     inputSchema: ExplanationInputSchema,

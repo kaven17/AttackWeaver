@@ -6,10 +6,8 @@ import { OverviewCards } from './overview-cards';
 import { ThreatList } from './threat-list';
 import { ThreatDetailsSheet } from './threat-details-sheet';
 import { Card } from '../ui/card';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
-import { calculateAdaptiveRiskScore } from '@/ai/flows/adaptive-risk-scoring';
-import { ThreatDistributionChart } from './threat-distribution-chart';
+import { analyzeThreat } from '@/ai/flows/analyze-threat-flow';
 
 type FeedbackAdjustment = {
   eventType: ProcessedThreat['event']['type'];
@@ -21,9 +19,7 @@ let persistedThreats: ProcessedThreat[] = [];
 
 export function DashboardPage({ initialThreats }: { initialThreats: ProcessedThreat[] }) {
   const [threats, setThreats] = useState<ProcessedThreat[]>(persistedThreats);
-  const [selectedThreatId, setSelectedThreatId] = useState<string | null>(
-    persistedThreats[0]?.id || null
-  );
+  const [selectedThreatId, setSelectedThreatId] = useState<string | null>(null);
   const [feedbackAdjustments, setFeedbackAdjustments] = useState<FeedbackAdjustment[]>([]);
   const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -62,31 +58,17 @@ export function DashboardPage({ initialThreats }: { initialThreats: ProcessedThr
 
     setIsAnalyzing(true);
     try {
-      // Simulate behavioral analysis
-      const behavioralResult = {
-        anomalyScore: Math.random() * 0.4 + 0.3, // Simulate moderate to high anomaly
-        explanation: `Behavioral analysis shows a deviation from baseline.`,
-      };
-
-      const riskResult = await calculateAdaptiveRiskScore({
-        ruleBasedSeverity: threatToAnalyze.ruleBasedSeverity,
-        contextualAnomalyScore: Math.random() * 0.5, // Simulate some context anomaly
-        behavioralDeviationScore: behavioralResult.anomalyScore,
-      });
+      const analysisResult = await analyzeThreat(threatToAnalyze);
 
       const updatedThreat: ProcessedThreat = {
         ...threatToAnalyze,
         isAnalyzed: true,
-        riskScore: riskResult.riskScore,
-        riskExplanation: riskResult.explanation,
-        detailedExplanation: `Risk score of ${riskResult.riskScore.toFixed(0)} is based on rule severity (${threatToAnalyze.ruleBasedSeverity}), contextual anomalies, and behavioral scores. ${riskResult.explanation}`,
-        behavioralAnomalyScore: behavioralResult.anomalyScore,
-        behavioralExplanation: behavioralResult.explanation,
-        riskBreakdown: {
-          ruleBased: threatToAnalyze.ruleBasedSeverity * 10,
-          contextual: Math.random() * 100,
-          behavioral: behavioralResult.anomalyScore * 100,
-        }
+        riskScore: analysisResult.riskScore,
+        riskExplanation: analysisResult.explanation,
+        detailedExplanation: analysisResult.detailedExplanation,
+        behavioralAnomalyScore: analysisResult.behavioralAnomalyScore,
+        behavioralExplanation: analysisResult.behavioralExplanation,
+        riskBreakdown: analysisResult.riskBreakdown,
       };
 
       const updatedThreats = threats.map(t => t.id === threatId ? updatedThreat : t);
@@ -143,7 +125,6 @@ export function DashboardPage({ initialThreats }: { initialThreats: ProcessedThr
   const mediumRiskCount = adjustedThreats.filter(
     t => (t.riskScore || 0) >= 40 && (t.riskScore || 0) < 70
   ).length;
-  const lowRiskCount = adjustedThreats.filter(t => (t.riskScore || 0) < 40).length;
 
   if (adjustedThreats.length === 0) {
     return (
@@ -167,76 +148,31 @@ export function DashboardPage({ initialThreats }: { initialThreats: ProcessedThr
         </p>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1fr_450px] gap-6 p-4 sm:p-6 pt-0">
-        <div className="flex flex-col gap-6">
+      <div className="flex-1 space-y-6 p-4 sm:p-6 pt-0">
           <OverviewCards
             totalThreats={adjustedThreats.length}
             highRiskCount={highRiskCount}
             mediumRiskCount={mediumRiskCount}
           />
-          <div className="grid grid-cols-1 gap-6">
-            <Card>
-              <ThreatList
-                threats={adjustedThreats}
-                onSelectThreat={(threat) => setSelectedThreatId(threat.id)}
-                selectedThreatId={selectedThreatId}
-              />
-            </Card>
-          </div>
-        </div>
-        
-        <div className="hidden xl:flex flex-col gap-6">
-            <Card>
-                <ThreatDistributionChart
-                    lowRiskCount={lowRiskCount}
-                    mediumRiskCount={mediumRiskCount}
-                    highRiskCount={highRiskCount}
-                />
-            </Card>
-            <AnimatePresence mode="wait">
-              {selectedThreat ? (
-                  <motion.div
-                    key={selectedThreat.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex-1"
-                  >
-                      <ThreatDetailsSheet
-                          threat={selectedThreat}
-                          onFeedback={handleFeedback}
-                          open={!!selectedThreat}
-                          onOpenChange={open => {
-                            if (!open) setSelectedThreatId(null);
-                          }}
-                          isSheet={false}
-                          onAnalyze={handleAnalyzeThreat}
-                          isAnalyzing={isAnalyzing}
-                      />
-                  </motion.div>
-              ) : (
-                <Card className='flex-1 flex items-center justify-center'>
-                    <p className='text-muted-foreground'>Select an event to see details</p>
-                </Card>
-              )}
-            </AnimatePresence>
-        </div>
+          <Card>
+            <ThreatList
+              threats={adjustedThreats}
+              onSelectThreat={(threat) => setSelectedThreatId(threat.id)}
+              selectedThreatId={selectedThreatId}
+            />
+          </Card>
       </div>
       
-      {/* Mobile/Tablet Sheet */}
-      <div className='xl:hidden'>
-        <ThreatDetailsSheet
-            threat={selectedThreat}
-            onFeedback={handleFeedback}
-            open={!!selectedThreat}
-            onOpenChange={open => {
-                if (!open) setSelectedThreatId(null);
-            }}
-            onAnalyze={handleAnalyzeThreat}
-            isAnalyzing={isAnalyzing}
-        />
-      </div>
+      <ThreatDetailsSheet
+          threat={selectedThreat}
+          onFeedback={handleFeedback}
+          open={!!selectedThreat}
+          onOpenChange={open => {
+              if (!open) setSelectedThreatId(null);
+          }}
+          onAnalyze={handleAnalyzeThreat}
+          isAnalyzing={isAnalyzing}
+      />
     </div>
   );
 }

@@ -76,7 +76,7 @@ const adaptiveRiskScoringPrompt = ai.definePrompt({
 });
 
 // Define the Genkit flow
-const adaptiveRiskScoringFlow = ai.defineFlow(
+export const adaptiveRiskScoringFlow = ai.defineFlow(
   {
     name: 'adaptiveRiskScoringFlow',
     inputSchema: AdaptiveRiskScoreInputSchema,
