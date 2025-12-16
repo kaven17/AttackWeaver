@@ -10,7 +10,7 @@ import {
 import type { ProcessedThreat } from '@/lib/types';
 import { Separator } from '../ui/separator';
 import { RiskScoreBadge } from './risk-score-badge';
-import { CheckCircle, XCircle, Zap, Bot } from 'lucide-react';
+import { Bot, User, HardDrive, Globe, Zap, AlertTriangle, Clock, Info } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Card,
@@ -21,153 +21,135 @@ import {
 } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BehavioralProfileView } from './behavioral-profile-view';
-import { ContextFlags } from './context-flags';
 import { Skeleton } from '../ui/skeleton';
+import { format } from 'date-fns';
 
-function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
-  if (!threat.isAnalyzed || !threat.riskBreakdown) {
-    return null;
-  }
-  return (
-    <Card className="border-accent/30 bg-accent/5">
-      <CardHeader>
-        <CardTitle className="text-base text-accent">
-          Why This Was Flagged
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2 font-code text-sm">
-          {threat.riskBreakdown.ruleBased > 10 && (
-            <li className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-                <span>
-                    High rule-based severity of{' '}
-                    <span className="font-bold text-foreground">
-                        {threat.ruleBasedSeverity}
-                    </span>{' '}
-                    for a "{threat.event.type}" event.
-                </span>
-            </li>
-           )}
-          {threat.riskBreakdown.contextual > 10 && (
-             <li className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-                <span>
-                    User operating from a{' '}
-                    <span className="font-bold text-foreground">novel location</span>{' '}
-                    or with a <span className="font-bold text-foreground">new device</span>.
-                </span>
-            </li>
-          )}
-          {threat.riskBreakdown.behavioral > 10 && (
-            <li className="flex items-start gap-2">
-                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-                <span>
-                    Significant{' '}
-                    <span className="font-bold text-foreground">
-                    behavioral deviation
-                    </span>{' '}
-                    detected.
-                </span>
-            </li>
-          )}
-        </ul>
-      </CardContent>
-    </Card>
-  );
+
+function DetailItem({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) {
+    return (
+        <div className="flex items-start gap-3">
+            <Icon className="h-5 w-5 flex-shrink-0 text-muted-foreground mt-0.5" />
+            <div className="flex flex-col">
+                <span className="text-sm text-muted-foreground">{label}</span>
+                <span className="font-medium text-foreground">{value}</span>
+            </div>
+        </div>
+    );
 }
 
-function ThreatDetailsContent({ 
-  threat, 
-  onFeedback,
+
+function ThreatDetailsContent({
+  threat,
   onAnalyze,
   isAnalyzing
-}: { 
-  threat: ProcessedThreat; 
-  onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void;
+}: {
+  threat: ProcessedThreat;
   onAnalyze: (threatId: string) => void;
   isAnalyzing: boolean;
 }) {
 
   return (
     <>
-      <SheetHeader className='p-6 pb-4'>
-            <div className='flex flex-col gap-1.5 text-left'>
-              <div className="flex items-center gap-2">
+      <SheetHeader className='p-6 pb-4 border-b'>
+            <div className='flex flex-col gap-2 text-left'>
+              <div className="flex items-center gap-3">
                 <RiskScoreBadge score={threat.riskScore ?? null} />
-                <h2 className="text-lg font-semibold">{threat.event.type}</h2>
+                <SheetTitle className="text-xl font-bold">{threat.event.type}</SheetTitle>
               </div>
-              <div className="text-sm text-muted-foreground">
-                {new Date(threat.timestamp).toLocaleString()}
-              </div>
+              <SheetDescription className="text-base text-muted-foreground">
+                {threat.riskExplanation}
+              </SheetDescription>
             </div>
       </SheetHeader>
 
-      <div className="flex-1 overflow-y-auto p-6 pt-0">
+      <div className="flex-1 overflow-y-auto p-6 pt-4">
         <Tabs defaultValue="overview">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            {threat.behavioralBaseline && <TabsTrigger value="behavior">Behavior Profile</TabsTrigger>}
+            <TabsTrigger value="behavior" disabled={!threat.behavioralBaseline}>Behavior Profile</TabsTrigger>
           </TabsList>
+          
           <TabsContent value="overview" className="mt-4 space-y-6">
-            {!threat.isAnalyzed ? (
-              <Card className="text-center p-6 flex flex-col items-center">
-                <Bot className="h-12 w-12 text-muted-foreground" />
-                <CardTitle className="mt-4 text-xl">Ready for Analysis</CardTitle>
-                <CardDescription className="mt-2">
-                  This event has not been analyzed by ThreatLens AI.
-                </CardDescription>
-                <Button className="mt-4" onClick={() => onAnalyze(threat.id)} disabled={isAnalyzing}>
-                  {isAnalyzing ? "Analyzing..." : "Analyze with ThreatLens AI"}
-                </Button>
-              </Card>
-            ) : (
-              <>
-                <ThreatExplanationCard threat={threat} />
-                <Separator />
-                <ContextFlags threat={threat} />
-                <Separator />
-                <div className="space-y-2">
-                    <h3 className="font-semibold text-foreground">
-                        ThreatLens AI™ Explanation
-                    </h3>
-                    <p className="rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
-                        {isAnalyzing 
-                          ? <Skeleton className="h-20" /> 
-                          : threat.detailedExplanation || "No explanation available."
-                        }
-                    </p>
-                </div>
-              </>
-            )}
-          </TabsContent>
-          {threat.behavioralBaseline && (
-            <TabsContent value="behavior" className="mt-4">
-              <BehavioralProfileView threat={threat} />
-            </TabsContent>
-          )}
-        </Tabs>
-      </div>
+            
+            <Card>
+                <CardHeader>
+                    <CardTitle>Event Details</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <DetailItem icon={User} label="User" value={`${threat.user.name} (${threat.user.role})`} />
+                    <DetailItem icon={Clock} label="Timestamp" value={format(new Date(threat.timestamp), "PPP p")} />
+                    <DetailItem icon={HardDrive} label="Host" value={threat.device.id} />
+                    <DetailItem icon={Globe} label="IP Address" value={threat.location.ip} />
+                    <DetailItem icon={Info} label="Details" value={threat.event.details} />
+                    {threat.device.isNovel && <DetailItem icon={AlertTriangle} label="Context" value="Novel Device" />}
+                    {threat.location.isNovel && <DetailItem icon={AlertTriangle} label="Context" value="Novel Location" />}
+                </CardContent>
+            </Card>
 
-      <div className="mt-auto border-t bg-card/50 p-4">
-        <div className="flex w-full gap-2">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => onFeedback(threat, false)}
-            disabled={!threat.isAnalyzed}
-          >
-            <XCircle /> Mark as Benign
-          </Button>
-          <Button
-            variant="destructive"
-            className="w-full"
-            onClick={() => onFeedback(threat, true)}
-            disabled={!threat.isAnalyzed}
-          >
-            <CheckCircle /> Confirm Threat
-          </Button>
-        </div>
+            <Separator />
+            
+            <div className="space-y-3">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    ThreatLens AI™ Analysis
+                </h3>
+                {!threat.isAnalyzed ? (
+                <Card className="text-center p-6 flex flex-col items-center bg-card/50 border-dashed">
+                    <CardDescription className="mt-2 mb-4 max-w-sm">
+                    This event has not been analyzed by ThreatLens AI. Run the analysis to get a detailed breakdown and enhanced risk score.
+                    </CardDescription>
+                    <Button onClick={() => onAnalyze(threat.id)} disabled={isAnalyzing}>
+                    {isAnalyzing ? (
+                        <>
+                            <Zap className="mr-2 h-4 w-4 animate-pulse" />
+                            Analyzing...
+                        </>
+                        ) : (
+                        <>
+                            <Zap className="mr-2 h-4 w-4" />
+                            Run ThreatLens AI Analysis
+                        </>
+                    )}
+                    </Button>
+                </Card>
+                ) : (
+                 <Card>
+                    <CardContent className="p-6 space-y-4">
+                        {isAnalyzing ? (
+                            <Skeleton className="h-24" />
+                        ) : (
+                        <p className="font-code text-sm text-muted-foreground bg-background p-4 rounded-md">
+                            {threat.detailedExplanation || "No detailed explanation available."}
+                        </p>
+                        )}
+                        {threat.riskBreakdown && (
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <div className="text-2xl font-bold">{threat.riskBreakdown.ruleBased}</div>
+                                    <div className="text-xs text-muted-foreground">Rule-Based</div>
+                                </div>
+                                <div>
+                                    <div className="text-2xl font-bold">{threat.riskBreakdown.contextual}</div>
+                                    <div className="text-xs text-muted-foreground">Contextual</div>
+                                </div>
+                                <div>
+                                    <div className="text-2xl font-bold">{threat.riskBreakdown.behavioral}</div>
+                                    <div className="text-xs text-muted-foreground">Behavioral</div>
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                 </Card>
+                )}
+            </div>
+
+          </TabsContent>
+          
+          <TabsContent value="behavior" className="mt-4">
+            <BehavioralProfileView threat={threat} />
+          </TabsContent>
+
+        </Tabs>
       </div>
     </>
   );
@@ -175,7 +157,6 @@ function ThreatDetailsContent({
 
 export function ThreatDetailsSheet({
   threat,
-  onFeedback,
   open,
   onOpenChange,
   onAnalyze,
@@ -185,21 +166,15 @@ export function ThreatDetailsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
-        <SheetTitle className="sr-only">
-          Threat Details: {threat.event.type}
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          Detailed information for security event {threat.id}.
-        </SheetDescription>
-        <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
+      <SheetContent className="w-full sm:max-w-xl lg:max-w-2xl flex flex-col p-0 gap-0">
+        <ThreatDetailsContent threat={threat} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
     </Sheet>
   );
 }
+
 type ThreatDetailsSheetProps = {
     threat: ProcessedThreat | null;
-    onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onAnalyze: (threatId: string) => void;

@@ -10,9 +10,7 @@ import {
   AnalyzeThreatInputSchema,
   AnalyzeThreatOutput,
   AnalyzeThreatOutputSchema,
-  EnrichedEvent,
 } from '@/lib/types';
-import { z } from 'zod';
 
 export async function analyzeThreat(
   input: AnalyzeThreatInput
@@ -30,11 +28,9 @@ const threatAnalysisPrompt = ai.definePrompt({
 
   Given the following enriched event data, you must:
   1.  Calculate a final 'riskScore' (0-100). This score should intelligently weigh the rule-based severity, contextual factors (novelty of device/location), and behavioral anomalies.
-  2.  Create a concise, one-sentence 'explanation' for the risk score.
-  3.  Generate a more 'detailedExplanation' (2-3 sentences) in markdown format, explaining the causal and contextual factors.
-  4.  Determine a 'behavioralAnomalyScore' (0.0 to 1.0) based on deviations from the user's established baseline.
-  5.  Write a 'behavioralExplanation' detailing why the behavior was considered anomalous.
-  6.  Provide a 'riskBreakdown' object with scores (0-100) for 'ruleBased', 'contextual', and 'behavioral' factors.
+  2.  Generate a 'detailedExplanation' (2-3 sentences) in markdown format, explaining the causal and contextual factors that an automated system might miss.
+  3.  Determine a 'behavioralAnomalyScore' (0.0 to 1.0) based on deviations from the user's established baseline.
+  4.  Provide a 'riskBreakdown' object with scores (0-100) for 'ruleBased', 'contextual', and 'behavioral' factors.
 
   Event Data:
   - Timestamp: {{{timestamp}}}
@@ -43,7 +39,8 @@ const threatAnalysisPrompt = ai.definePrompt({
   - Device: {{{device.id}}} (Novelty: {{{device.isNovel}}})
   - Event Type: {{{event.type}}}
   - Event Details: {{{event.details}}}
-  - Rule-Based Severity (1-10): {{{ruleBasedSeverity}}}
+  - Initial Rule-Based Severity (1-10): {{{ruleBasedSeverity}}}
+  - Initial Rule-Based Explanation: {{{riskExplanation}}}
 
   User's Behavioral Baseline:
   - Normal Login Hours: {{{behavioralBaseline.loginTime.normalRange.[0]}}}:00 - {{{behavioralBaseline.loginTime.normalRange.[1]}}}:00

@@ -8,61 +8,32 @@ import { ThreatDetailsSheet } from './threat-details-sheet';
 import { Card } from '../ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { analyzeThreat } from '@/ai/flows/analyze-threat-flow';
-
-type FeedbackAdjustment = {
-  eventType: ProcessedThreat['event']['type'];
-  adjustment: number;
-};
-
-// Store threats in a global scope to persist between navigations
-let persistedThreats: ProcessedThreat[] = [];
+import { Button } from '../ui/button';
+import { UploadCloud } from 'lucide-react';
+import Link from 'next/link';
 
 export function DashboardPage({
   initialThreats,
 }: {
   initialThreats: ProcessedThreat[];
 }) {
-  const [threats, setThreats] = useState<ProcessedThreat[]>(persistedThreats);
+  const [threats, setThreats] = useState<ProcessedThreat[]>(initialThreats);
   const [selectedThreatId, setSelectedThreatId] = useState<string | null>(null);
-  const [feedbackAdjustments, setFeedbackAdjustments] = useState<
-    FeedbackAdjustment[]
-  >([]);
   const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const storedThreats = localStorage.getItem('processedThreats');
     if (storedThreats) {
-      const parsedThreats = JSON.parse(storedThreats);
-      setThreats(parsedThreats);
-      persistedThreats = parsedThreats;
-    } else if (initialThreats.length > 0) {
-      setThreats(initialThreats);
-      persistedThreats = initialThreats;
+      const parsedThreats: ProcessedThreat[] = JSON.parse(storedThreats);
+      // Recalculate scores on load to ensure consistency
+      const threatsWithScores = parsedThreats.map(t => ({
+        ...t,
+        riskScore: t.riskScore ?? t.ruleBasedSeverity * 10,
+      })).sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+      setThreats(threatsWithScores);
     }
-  }, [initialThreats]);
-
-  const handleFeedback = useCallback(
-    (threat: ProcessedThreat, isConfirmedThreat: boolean) => {
-      const adjustmentValue = isConfirmedThreat ? 0.1 : -0.1;
-      const adjustment: FeedbackAdjustment = {
-        eventType: threat.event.type,
-        adjustment: adjustmentValue,
-      };
-
-      setFeedbackAdjustments((prev) => [...prev, adjustment]);
-
-      toast({
-        title: 'Feedback Received',
-        description: `Risk model updated. Applying a ${
-          adjustmentValue > 0 ? '+' : ''
-        }${(adjustmentValue * 100).toFixed(
-          0
-        )}% risk adjustment to all "${threat.event.type}" events.`,
-      });
-    },
-    [toast]
-  );
+  }, []);
 
   const handleAnalyzeThreat = useCallback(
     async (threatId: string) => {
@@ -70,36 +41,8 @@ export function DashboardPage({
       if (!threatToAnalyze || threatToAnalyze.isAnalyzed) return;
 
       setIsAnalyzing(true);
-      let analysisResult: AnalyzeThreatOutput;
-
       try {
-        analysisResult = await analyzeThreat(threatToAnalyze);
-      } catch (error) {
-        console.error('Failed to analyze threat:', error);
-        toast({
-          variant: 'destructive',
-          title: 'AI Analysis Failed',
-          description:
-            'Could not connect to ThreatLens AI. Displaying fallback analysis.',
-        });
-        
-        // Create a fallback analysis object
-        const contextualScore = (threatToAnalyze.device.isNovel || threatToAnalyze.location.isNovel) ? 20 : 0;
-        const fallbackRiskScore = Math.min(100, threatToAnalyze.ruleBasedSeverity * 8 + contextualScore);
-        
-        analysisResult = {
-          riskScore: fallbackRiskScore,
-          explanation: `AI analysis failed. Score based on severity and context.`,
-          detailedExplanation: `Could not connect to ThreatLens AI™ for detailed analysis. The event was a "${threatToAnalyze.event.type}" by user "${threatToAnalyze.user.name}" from ${threatToAnalyze.location.country}.`,
-          behavioralAnomalyScore: null,
-          behavioralExplanation: "Could not connect to AI for behavioral analysis.",
-          riskBreakdown: {
-            ruleBased: threatToAnalyze.ruleBasedSeverity * 10,
-            contextual: contextualScore,
-            behavioral: 0
-          }
-        };
-      } finally {
+        const analysisResult: AnalyzeThreatOutput = await analyzeThreat(threatToAnalyze);
         const updatedThreat: ProcessedThreat = {
           ...threatToAnalyze,
           ...analysisResult,
@@ -110,95 +53,80 @@ export function DashboardPage({
           t.id === threatId ? updatedThreat : t
         );
         setThreats(updatedThreats);
-        persistedThreats = updatedThreats;
         localStorage.setItem('processedThreats', JSON.stringify(updatedThreats));
+
+      } catch (error) {
+        console.error('Failed to analyze threat:', error);
+        toast({
+          variant: 'destructive',
+          title: 'AI Analysis Failed',
+          description:
+            'Could not connect to ThreatLens AI. Please check your API key and network connection.',
+        });
+      } finally {
         setIsAnalyzing(false);
       }
     },
     [threats, toast]
   );
 
-  const adjustedThreats = useMemo(() => {
-    if (feedbackAdjustments.length === 0) {
-      return threats;
-    }
-
-    const adjustmentsByType = feedbackAdjustments.reduce(
-      (acc, curr) => {
-        acc[curr.eventType] = (acc[curr.eventType] || 0) + curr.adjustment;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
-
-    const newThreats = threats.map((threat) => {
-      const adjustment = adjustmentsByType[threat.event.type] || 0;
-      if (adjustment !== 0 && threat.riskScore) {
-        const newRiskScore = threat.riskScore * (1 + adjustment);
-        return {
-          ...threat,
-          riskScore: Math.min(100, Math.max(0, newRiskScore)),
-        };
-      }
-      return threat;
-    });
-
-    newThreats.sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0));
-    return newThreats;
-  }, [threats, feedbackAdjustments]);
-
   const selectedThreat = useMemo(
-    () => adjustedThreats.find((t) => t.id === selectedThreatId) || null,
-    [adjustedThreats, selectedThreatId]
+    () => threats.find((t) => t.id === selectedThreatId) || null,
+    [threats, selectedThreatId]
   );
 
-  const highRiskCount = adjustedThreats.filter(
+  const highRiskCount = threats.filter(
     (t) => (t.riskScore || 0) >= 70
   ).length;
-  const mediumRiskCount = adjustedThreats.filter(
+  const mediumRiskCount = threats.filter(
     (t) => (t.riskScore || 0) >= 40 && (t.riskScore || 0) < 70
   ).length;
 
-  if (adjustedThreats.length === 0) {
+  if (threats.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center h-full p-8 text-center">
-        <h2 className="text-2xl font-semibold">No Security Events</h2>
-        <p className="text-muted-foreground mt-2">
-          Go to the 'Ingest Logs' page to process security data.
+      <div className="flex flex-1 flex-col items-center justify-center h-full p-8 text-center bg-background rounded-xl">
+        <UploadCloud className="w-16 h-16 text-muted-foreground" />
+        <h2 className="text-2xl font-semibold mt-4">No Security Events</h2>
+        <p className="text-muted-foreground mt-2 max-w-sm">
+          There are no security events to display. Please go to the 'Ingest Logs' page to upload and process your security data.
         </p>
+        <Button asChild className="mt-6">
+          <Link href="/ingest">
+            <UploadCloud />
+            <span>Ingest Logs</span>
+          </Link>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col @container">
-      <header className="p-6 md:p-8">
-        <h1 className="font-headline text-3xl font-bold tracking-tight">
+    <div className="flex flex-1 flex-col @container/dashboard p-4 md:p-6 lg:p-8 gap-6">
+      <header>
+        <h1 className="font-headline text-3xl font-bold tracking-tight text-foreground">
           Threat Intelligence Dashboard
         </h1>
         <p className="text-muted-foreground">
-          AI-powered analysis of security events.
+          AI-powered analysis of security events. Click an event to analyze.
         </p>
       </header>
 
-      <div className="flex-1 space-y-8 p-6 md:p-8 pt-0">
-        <OverviewCards
-          totalThreats={adjustedThreats.length}
-          highRiskCount={highRiskCount}
-          mediumRiskCount={mediumRiskCount}
+      <OverviewCards
+        totalThreats={threats.length}
+        highRiskCount={highRiskCount}
+        mediumRiskCount={mediumRiskCount}
+      />
+      
+      <Card className='flex-1'>
+        <ThreatList
+          threats={threats}
+          onSelectThreat={(threat) => setSelectedThreatId(threat.id)}
+          selectedThreatId={selectedThreatId}
         />
-        <Card>
-          <ThreatList
-            threats={adjustedThreats}
-            onSelectThreat={(threat) => setSelectedThreatId(threat.id)}
-            selectedThreatId={selectedThreatId}
-          />
-        </Card>
-      </div>
+      </Card>
 
       <ThreatDetailsSheet
         threat={selectedThreat}
-        onFeedback={handleFeedback}
         open={!!selectedThreat}
         onOpenChange={(open) => {
           if (!open) setSelectedThreatId(null);

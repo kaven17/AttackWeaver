@@ -37,14 +37,14 @@ export interface EnrichedEvent {
       | 'Unknown';
     details: string;
   };
-  ruleBasedSeverity: number;
+  ruleBasedSeverity: number; // Combined score from rules
+  riskExplanation: string; // Explanation based on rules
   behavioralBaseline: UserBehaviorBaseline;
 }
 
 export interface ProcessedThreat extends EnrichedEvent {
-  riskScore: number | null; // Can be null until analyzed
-  riskExplanation: string | null;
-  detailedExplanation: string | null;
+  riskScore: number | null; // Can be null until analyzed, then updated by AI
+  detailedExplanation: string | null; // AI-generated explanation
   behavioralAnomalyScore: number | null;
   behavioralExplanation: string | null;
   riskBreakdown: {
@@ -75,11 +75,9 @@ export const AnalyzeThreatInputSchema = z.custom<EnrichedEvent>();
 export type AnalyzeThreatInput = z.infer<typeof AnalyzeThreatInputSchema>;
 
 export const AnalyzeThreatOutputSchema = z.object({
-    riskScore: z.number().describe("The final calculated risk score for the event (0-100)."),
-    explanation: z.string().describe("A concise, one-sentence explanation of the risk score."),
-    detailedExplanation: z.string().describe("A detailed, human-readable explanation of the event and its risk score (2-3 sentences, markdown format)."),
+    riskScore: z.number().describe("The final calculated risk score for the event (0-100), enhancing the initial rule-based score."),
+    detailedExplanation: z.string().describe("A detailed, human-readable explanation of the event and its risk score (2-3 sentences, markdown format), focusing on subtle correlations."),
     behavioralAnomalyScore: z.number().describe("A probabilistic anomaly score (0.0-1.0) indicating the degree of deviation from the established behavioral baseline."),
-    behavioralExplanation: z.string().describe("A human-readable explanation of the factors contributing to the behavioral anomaly score."),
     riskBreakdown: z.object({
         ruleBased: z.number().describe("Contribution to risk from static rules (0-100)."),
         contextual: z.number().describe("Contribution to risk from contextual factors like location/device novelty (0-100)."),
