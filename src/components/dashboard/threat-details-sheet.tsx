@@ -5,6 +5,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from '@/components/ui/sheet';
 import type { ProcessedThreat } from '@/lib/types';
 import { Separator } from '../ui/separator';
@@ -201,6 +202,9 @@ export function ThreatDetailsSheet({
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
         <SheetHeader className='p-6 pb-4'>
             <SheetTitle asChild>{header}</SheetTitle>
+            <SheetDescription className='sr-only'>
+                Detailed view of a security threat.
+            </SheetDescription>
         </SheetHeader>
         <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
