@@ -5,32 +5,21 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
-  SheetFooter,
 } from '@/components/ui/sheet';
 import type { ProcessedThreat } from '@/lib/types';
 import { Separator } from '../ui/separator';
 import { RiskScoreBadge } from './risk-score-badge';
-import {
-  CheckCircle,
-  XCircle,
-  FileCode,
-  ShieldCheck,
-  User,
-  Zap,
-} from 'lucide-react';
+import { CheckCircle, XCircle, Zap } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BehavioralProfileView } from './behavioral-profile-view';
 import { ContextFlags } from './context-flags';
-import { useToast } from '@/hooks/use-toast';
 
 function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
   return (
@@ -89,17 +78,7 @@ function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
   );
 }
 
-function ThreatDetailsContent({ threat }: { threat: ProcessedThreat }) {
-  const { toast } = useToast();
-
-  const handleFeedback = (isThreat: boolean) => {
-    toast({
-      title: 'Feedback Received',
-      description: `Risk model updated for similar future events. ${
-        isThreat ? '+8' : '-5'
-      } future risk weight applied.`,
-    });
-  };
+function ThreatDetailsContent({ threat, onFeedback }: { threat: ProcessedThreat; onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void; }) {
 
   return (
     <>
@@ -134,30 +113,31 @@ function ThreatDetailsContent({ threat }: { threat: ProcessedThreat }) {
         </Tabs>
       </div>
 
-      <SheetFooter className="mt-auto border-t bg-card/50 p-4">
+      <div className="mt-auto border-t bg-card/50 p-4">
         <div className="flex w-full gap-2">
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => handleFeedback(false)}
+            onClick={() => onFeedback(threat, false)}
           >
             <XCircle /> Mark as Benign
           </Button>
           <Button
             variant="destructive"
             className="w-full"
-            onClick={() => handleFeedback(true)}
+            onClick={() => onFeedback(threat, true)}
           >
             <CheckCircle /> Confirm Threat
           </Button>
         </div>
-      </SheetFooter>
+      </div>
     </>
   );
 }
 
 export function ThreatDetailsSheet({
   threat,
+  onFeedback,
   open,
   onOpenChange,
   isSheet = true,
@@ -165,7 +145,7 @@ export function ThreatDetailsSheet({
   if (!threat) return null;
 
   const header = (
-    <>
+    <div className='flex flex-col gap-1.5'>
       <div className="flex items-center gap-2">
         <RiskScoreBadge score={threat.riskScore} />
         <h2 className="text-lg font-semibold">{threat.event.type}</h2>
@@ -173,7 +153,7 @@ export function ThreatDetailsSheet({
       <div className="text-sm text-muted-foreground">
         {new Date(threat.timestamp).toLocaleString()}
       </div>
-    </>
+    </div>
   );
 
   if (!isSheet) {
@@ -182,7 +162,7 @@ export function ThreatDetailsSheet({
           <CardHeader>
             {header}
           </CardHeader>
-          <ThreatDetailsContent threat={threat} />
+          <ThreatDetailsContent threat={threat} onFeedback={onFeedback} />
       </Card>
     );
   }
@@ -193,13 +173,14 @@ export function ThreatDetailsSheet({
         <SheetHeader className='p-6 pb-4'>
             <SheetTitle asChild>{header}</SheetTitle>
         </SheetHeader>
-        <ThreatDetailsContent threat={threat} />
+        <ThreatDetailsContent threat={threat} onFeedback={onFeedback} />
       </SheetContent>
     </Sheet>
   );
 }
 type ThreatDetailsSheetProps = {
     threat: ProcessedThreat | null;
+    onFeedback: (threat: ProcessedThreat, isConfirmed: boolean) => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     isSheet?: boolean;
