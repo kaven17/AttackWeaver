@@ -36,17 +36,11 @@ export function DashboardPage({
       const parsedThreats = JSON.parse(storedThreats);
       setThreats(parsedThreats);
       persistedThreats = parsedThreats;
-      if (parsedThreats.length > 0 && !selectedThreatId) {
-        setSelectedThreatId(parsedThreats[0].id);
-      }
     } else if (initialThreats.length > 0) {
       setThreats(initialThreats);
       persistedThreats = initialThreats;
-      if (!selectedThreatId) {
-        setSelectedThreatId(initialThreats[0].id);
-      }
     }
-  }, [initialThreats, selectedThreatId]);
+  }, [initialThreats]);
 
   const handleFeedback = useCallback(
     (threat: ProcessedThreat, isConfirmedThreat: boolean) => {
