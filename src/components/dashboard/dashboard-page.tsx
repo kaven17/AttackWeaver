@@ -172,7 +172,7 @@ export function DashboardPage({
 
   return (
     <div className="flex flex-1 flex-col @container">
-      <header className="p-4 sm:p-6">
+      <header className="p-6 md:p-8">
         <h1 className="font-headline text-3xl font-bold tracking-tight">
           Threat Intelligence Dashboard
         </h1>
@@ -181,7 +181,7 @@ export function DashboardPage({
         </p>
       </header>
 
-      <div className="flex-1 space-y-6 p-4 sm:p-6 pt-0">
+      <div className="flex-1 space-y-8 p-6 md:p-8 pt-0">
         <OverviewCards
           totalThreats={adjustedThreats.length}
           highRiskCount={highRiskCount}
