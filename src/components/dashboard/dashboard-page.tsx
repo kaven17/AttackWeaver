@@ -62,13 +62,8 @@ export function DashboardPage({ initialThreats }: { initialThreats: ProcessedThr
 
       const updatedThreat: ProcessedThreat = {
         ...threatToAnalyze,
+        ...analysisResult,
         isAnalyzed: true,
-        riskScore: analysisResult.riskScore,
-        riskExplanation: analysisResult.explanation,
-        detailedExplanation: analysisResult.detailedExplanation,
-        behavioralAnomalyScore: analysisResult.behavioralAnomalyScore,
-        behavioralExplanation: analysisResult.behavioralExplanation,
-        riskBreakdown: analysisResult.riskBreakdown,
       };
 
       const updatedThreats = threats.map(t => t.id === threatId ? updatedThreat : t);

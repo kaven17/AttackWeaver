@@ -12,31 +12,13 @@ import {
   AnalyzeThreatOutputSchema,
   EnrichedEvent,
 } from '@/lib/types';
+import { z } from 'zod';
 
 export async function analyzeThreat(
   input: AnalyzeThreatInput
 ): Promise<AnalyzeThreatOutput> {
-  // Defensive check if the input is already an AnalyzeThreatOutput
-  if ('riskScore' in input && input.riskScore !== null) {
-    return input as ProcessedThreat;
-  }
-  
-  const event = input as EnrichedEvent;
-
-  const analysisResult = await analyzeThreatFlow(event);
-  
-  const updatedThreat: AnalyzeThreatOutput = {
-    ...event,
-    isAnalyzed: true,
-    riskScore: analysisResult.riskScore,
-    riskExplanation: analysisResult.explanation,
-    detailedExplanation: analysisResult.detailedExplanation,
-    behavioralAnomalyScore: analysisResult.behavioralAnomalyScore,
-    behavioralExplanation: analysisResult.behavioralExplanation,
-    riskBreakdown: analysisResult.riskBreakdown,
-  };
-
-  return updatedThreat;
+  const analysisResult = await analyzeThreatFlow(input);
+  return analysisResult;
 }
 
 const threatAnalysisPrompt = ai.definePrompt({
