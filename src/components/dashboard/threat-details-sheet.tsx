@@ -25,6 +25,9 @@ import { ContextFlags } from './context-flags';
 import { Skeleton } from '../ui/skeleton';
 
 function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
+  if (!threat.isAnalyzed || !threat.riskBreakdown) {
+    return null;
+  }
   return (
     <Card className="border-accent/30 bg-accent/5">
       <CardHeader>
@@ -34,45 +37,38 @@ function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
       </CardHeader>
       <CardContent>
         <ul className="space-y-2 font-code text-sm">
-          <li className="flex items-start gap-2">
-            <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-            <span>
-              High rule-based severity of{' '}
-              <span className="font-bold text-foreground">
-                {threat.ruleBasedSeverity}
-              </span>{' '}
-              for a "{threat.event.type}" event.
-            </span>
-          </li>
-          {threat.location.isNovel && (
+          {threat.riskBreakdown.ruleBased > 10 && (
             <li className="flex items-start gap-2">
-              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-              <span>
-                User operating from a{' '}
-                <span className="font-bold text-foreground">novel location</span>{' '}
-                ({threat.location.country}).
-              </span>
+                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+                <span>
+                    High rule-based severity of{' '}
+                    <span className="font-bold text-foreground">
+                        {threat.ruleBasedSeverity}
+                    </span>{' '}
+                    for a "{threat.event.type}" event.
+                </span>
+            </li>
+           )}
+          {threat.riskBreakdown.contextual > 10 && (
+             <li className="flex items-start gap-2">
+                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+                <span>
+                    User operating from a{' '}
+                    <span className="font-bold text-foreground">novel location</span>{' '}
+                    or with a <span className="font-bold text-foreground">new device</span>.
+                </span>
             </li>
           )}
-          {threat.device.isNovel && (
+          {threat.riskBreakdown.behavioral > 10 && (
             <li className="flex items-start gap-2">
-              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-              <span>
-                Access from a{' '}
-                <span className="font-bold text-foreground">new device</span>.
-              </span>
-            </li>
-          )}
-          {threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.5 && (
-            <li className="flex items-start gap-2">
-              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
-              <span>
-                Significant{' '}
-                <span className="font-bold text-foreground">
-                  behavioral deviation
-                </span>{' '}
-                detected by CyberDNA™.
-              </span>
+                <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+                <span>
+                    Significant{' '}
+                    <span className="font-bold text-foreground">
+                    behavioral deviation
+                    </span>{' '}
+                    detected.
+                </span>
             </li>
           )}
         </ul>
@@ -96,7 +92,6 @@ function ThreatDetailsContent({
   return (
     <>
       <SheetHeader className='p-6 pb-4'>
-        <SheetTitle asChild>
             <div className='flex flex-col gap-1.5 text-left'>
               <div className="flex items-center gap-2">
                 <RiskScoreBadge score={threat.riskScore ?? null} />
@@ -106,7 +101,6 @@ function ThreatDetailsContent({
                 {new Date(threat.timestamp).toLocaleString()}
               </div>
             </div>
-        </SheetTitle>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto p-6 pt-0">
@@ -190,6 +184,12 @@ export function ThreatDetailsSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
+        <SheetTitle className="sr-only">
+          Threat Details: {threat.event.type}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Detailed information for security event {threat.id}.
+        </SheetDescription>
         <ThreatDetailsContent threat={threat} onFeedback={onFeedback} onAnalyze={onAnalyze} isAnalyzing={isAnalyzing} />
       </SheetContent>
     </Sheet>
