@@ -9,6 +9,7 @@ import { Card } from '../ui/card';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { calculateAdaptiveRiskScore } from '@/ai/flows/adaptive-risk-scoring';
+import { ThreatDistributionChart } from './threat-distribution-chart';
 
 type FeedbackAdjustment = {
   eventType: ProcessedThreat['event']['type'];
