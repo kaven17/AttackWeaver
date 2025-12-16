@@ -1,3 +1,17 @@
+export interface UserBehaviorBaseline {
+    loginTime: {
+        normalRange: [number, number]; // e.g., [8, 17] for 8am-5pm
+        typicalDays: string[]; // e.g., ['Mon', 'Tue', 'Wed']
+    };
+    resourceAccess: {
+        typicalOrder: string[];
+    };
+    apiCallFrequency: {
+        mean: number;
+        stdDev: number;
+    };
+}
+
 export interface RawEvent {
   id: string;
   timestamp: string;
@@ -25,12 +39,19 @@ export interface RawEvent {
   };
   ruleBasedSeverity: number; // 1-10
   contextualAnomalyScore: number; // 0-1
+  behavioralAnomalyScore: number; // 0-1
+  behavioralBaseline: UserBehaviorBaseline;
+  confidence: number; // 0-1
 }
 
 export interface ProcessedThreat extends RawEvent {
   riskScore: number;
   riskExplanation: string;
   detailedExplanation: string;
-  behavioralAnomalyScore: number;
   behavioralExplanation: string;
+  riskBreakdown: {
+    ruleBased: number;
+    contextual: number;
+    behavioral: number;
+  };
 }

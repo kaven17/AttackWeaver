@@ -31,10 +31,10 @@ export function ThreatList({
       <CardHeader>
         <CardTitle>Security Events</CardTitle>
         <CardDescription>
-          High-risk events detected by the AI engine.
+          {threats.length} events detected in the last 7 days.
         </CardDescription>
       </CardHeader>
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 h-96">
         <ScrollArea className="absolute inset-0 h-full">
           <Table>
             <TableHeader>

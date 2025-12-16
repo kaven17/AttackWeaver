@@ -12,84 +12,148 @@ import type { ProcessedThreat } from '@/lib/types';
 import { Separator } from '../ui/separator';
 import { RiskScoreBadge } from './risk-score-badge';
 import {
-  Globe,
-  HardDrive,
-  Info,
+  CheckCircle,
+  XCircle,
+  FileCode,
   ShieldCheck,
   User,
   Zap,
 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '../ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BehavioralProfileView } from './behavioral-profile-view';
+import { ContextFlags } from './context-flags';
+import { useToast } from '@/hooks/use-toast';
 
-type ThreatDetailsSheetProps = {
-  threat: ProcessedThreat | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  isSheet?: boolean;
-};
-
-const DetailItem = ({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-}) => (
-  <div className="flex items-start gap-3">
-    <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-    <div className="flex flex-col">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
-    </div>
-  </div>
-);
+function ThreatExplanationCard({ threat }: { threat: ProcessedThreat }) {
+  return (
+    <Card className="border-accent/30 bg-accent/5">
+      <CardHeader>
+        <CardTitle className="text-base text-accent">
+          Why This Was Flagged
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-2 font-code text-sm">
+          <li className="flex items-start gap-2">
+            <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+            <span>
+              High rule-based severity of{' '}
+              <span className="font-bold text-foreground">
+                {threat.ruleBasedSeverity}
+              </span>{' '}
+              for a "{threat.event.type}" event.
+            </span>
+          </li>
+          {threat.location.isNovel && (
+            <li className="flex items-start gap-2">
+              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+              <span>
+                User operating from a{' '}
+                <span className="font-bold text-foreground">novel location</span>{' '}
+                ({threat.location.country}).
+              </span>
+            </li>
+          )}
+          {threat.device.isNovel && (
+            <li className="flex items-start gap-2">
+              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+              <span>
+                Access from a{' '}
+                <span className="font-bold text-foreground">new device</span>.
+              </span>
+            </li>
+          )}
+          {threat.behavioralAnomalyScore > 0.5 && (
+            <li className="flex items-start gap-2">
+              <Zap className="mt-1 h-4 w-4 flex-shrink-0 text-amber-400" />
+              <span>
+                Significant{' '}
+                <span className="font-bold text-foreground">
+                  behavioral deviation
+                </span>{' '}
+                detected by CyberDNA™.
+              </span>
+            </li>
+          )}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
 
 function ThreatDetailsContent({ threat }: { threat: ProcessedThreat }) {
-    return (
-        <>
-            <CardContent className="flex-1 overflow-y-auto space-y-6 pt-6">
-                <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
-                    <DetailItem icon={Zap} label="Event Type" value={threat.event.type} />
-                    <DetailItem icon={Info} label="Description" value={threat.event.details} />
-                </div>
+  const { toast } = useToast();
 
-                <div className="grid grid-cols-2 gap-4">
-                    <DetailItem icon={User} label="User" value={`${threat.user.name} (${threat.user.role})`} />
-                    <DetailItem icon={Globe} label="Location" value={`${threat.location.country} (${threat.location.ip})`} />
-                    <DetailItem icon={HardDrive} label="Device ID" value={threat.device.id.split('-')[0]} />
-                    <DetailItem icon={ShieldCheck} label="Rule Severity" value={String(threat.ruleBasedSeverity)} />
-                </div>
+  const handleFeedback = (isThreat: boolean) => {
+    toast({
+      title: 'Feedback Received',
+      description: `Risk model updated for similar future events. ${
+        isThreat ? '+8' : '-5'
+      } future risk weight applied.`,
+    });
+  };
 
-                <Separator />
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto p-6">
+        <Tabs defaultValue="overview">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="behavior">Behavior Profile</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="mt-4 space-y-6">
+            <ThreatExplanationCard threat={threat} />
 
-                <div>
-                    <h3 className="font-semibold text-foreground">
-                        CyberDNA™ Analysis
-                    </h3>
-                    <p className="mt-2 rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
-                        {threat.behavioralExplanation}
-                    </p>
-                </div>
+            <Separator />
+            
+            <ContextFlags threat={threat} />
 
-                <div>
-                    <h3 className="font-semibold text-foreground">
-                        ThreatLens AI™ Explanation
-                    </h3>
-                    <p className="mt-2 rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
-                        {threat.detailedExplanation}
-                    </p>
-                </div>
-            </CardContent>
+            <Separator />
+            
+            <div className="space-y-2">
+                <h3 className="font-semibold text-foreground">
+                    ThreatLens AI™ Explanation
+                </h3>
+                <p className="rounded-lg bg-card p-4 font-code text-sm text-muted-foreground shadow-sm">
+                    {threat.detailedExplanation}
+                </p>
+            </div>
+            
+          </TabsContent>
+          <TabsContent value="behavior" className="mt-4">
+            <BehavioralProfileView threat={threat} />
+          </TabsContent>
+        </Tabs>
+      </div>
 
-            <SheetFooter className="mt-auto border-t p-6 pt-4">
-                <Button variant="secondary">Mark as Benign</Button>
-                <Button variant="destructive">Escalate</Button>
-            </SheetFooter>
-        </>
-    );
+      <SheetFooter className="mt-auto border-t bg-card/50 p-4">
+        <div className="flex w-full gap-2">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => handleFeedback(false)}
+          >
+            <XCircle /> Mark as Benign
+          </Button>
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={() => handleFeedback(true)}
+          >
+            <CheckCircle /> Confirm Threat
+          </Button>
+        </div>
+      </SheetFooter>
+    </>
+  );
 }
 
 export function ThreatDetailsSheet({
@@ -100,17 +164,23 @@ export function ThreatDetailsSheet({
 }: ThreatDetailsSheetProps) {
   if (!threat) return null;
 
+  const header = (
+    <>
+      <div className="flex items-center gap-2">
+        <RiskScoreBadge score={threat.riskScore} />
+        <h2 className="text-lg font-semibold">{threat.event.type}</h2>
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {new Date(threat.timestamp).toLocaleString()}
+      </div>
+    </>
+  );
+
   if (!isSheet) {
     return (
-      <Card className='h-full flex flex-col'>
+      <Card className="h-full flex flex-col">
           <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                  Event Details
-                  <RiskScoreBadge score={threat.riskScore} />
-              </CardTitle>
-              <CardDescription>
-                  {new Date(threat.timestamp).toLocaleString()}
-              </CardDescription>
+            {header}
           </CardHeader>
           <ThreatDetailsContent threat={threat} />
       </Card>
@@ -120,17 +190,17 @@ export function ThreatDetailsSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
-        <SheetHeader className='p-6 pb-0'>
-            <SheetTitle className="flex items-center gap-2">
-                Event Details
-                <RiskScoreBadge score={threat.riskScore} />
-            </SheetTitle>
-            <SheetDescription>
-                {new Date(threat.timestamp).toLocaleString()}
-            </SheetDescription>
+        <SheetHeader className='p-6 pb-4'>
+            <SheetTitle asChild>{header}</SheetTitle>
         </SheetHeader>
         <ThreatDetailsContent threat={threat} />
       </SheetContent>
     </Sheet>
   );
 }
+type ThreatDetailsSheetProps = {
+    threat: ProcessedThreat | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    isSheet?: boolean;
+};
