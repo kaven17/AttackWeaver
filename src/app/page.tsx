@@ -1,6 +1,4 @@
-import { behavioralFingerprinting } from '@/ai/flows/behavioral-fingerprinting';
 import { calculateAdaptiveRiskScore } from '@/ai/flows/adaptive-risk-scoring';
-import { generateExplanation } from '@/ai/flows/explainable-intelligence';
 import { DashboardPage } from '@/components/dashboard/dashboard-page';
 import { generateMockEvents } from '@/lib/mock-data';
 import type { ProcessedThreat, RawEvent } from '@/lib/types';
@@ -9,21 +7,19 @@ import type { ProcessedThreat, RawEvent } from '@/lib/types';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default async function Home() {
-  const rawEvents = generateMockEvents(15);
+  const rawEvents = generateMockEvents(5);
   // Add a small delay to simulate real-world data fetching
   await sleep(500);
 
   const processedThreats = await Promise.all(
     rawEvents.map(
       async (event: RawEvent): Promise<ProcessedThreat> => {
-        const behavioralResult = await behavioralFingerprinting({
-          userId: event.user.id,
-          deviceId: event.device.id,
-          // These would be based on historical data, we'll simulate them
-          loginTimeDistribution: [Math.random(), Math.random(), Math.random()],
-          resourceAccessOrder: ['/dashboard', '/api/users', '/settings'],
-          apiCallFrequency: [Math.random() * 100, Math.random() * 50],
-        });
+        // To avoid rate limiting on the free tier, we'll only run one of the AI flows.
+        // And we'll simulate the others.
+        const behavioralResult = {
+          anomalyScore: Math.random(),
+          explanation: 'Simulated behavioral analysis due to rate limits. No significant deviation detected.'
+        };
 
         const riskResult = await calculateAdaptiveRiskScore({
           ruleBasedSeverity: event.ruleBasedSeverity,
@@ -31,13 +27,10 @@ export default async function Home() {
           behavioralDeviationScore: behavioralResult.anomalyScore,
         });
 
-        const explanationResult = await generateExplanation({
-          eventDescription: event.event.details,
-          riskScore: riskResult.riskScore,
-          severity: riskResult.riskScore > 70 ? 'High' : riskResult.riskScore > 40 ? 'Medium' : 'Low',
-          contextualAnomalies: `Novel device: ${event.device.isNovel}, Novel location: ${event.location.isNovel}`,
-          behavioralDeviations: behavioralResult.explanation,
-        });
+        // Simulate explanation to reduce AI calls
+        const explanationResult = {
+           explanation: `Risk score of ${riskResult.riskScore.toFixed(0)} is based on rule severity (${event.ruleBasedSeverity}), contextual anomalies, and behavioral scores. ${riskResult.explanation}`
+        };
 
         return {
           ...event,
