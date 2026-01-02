@@ -1,18 +1,12 @@
 'use server';
 
-/**
- * @fileOverview Generates human-readable explanations for flagged events, detailing the factors contributing to the risk score.
- *
- * - generateExplanation - A function that generates the explanation for a flagged event.
- * - ExplanationInput - The input type for the generateExplanation function.
- * - ExplanationOutput - The return type for the generateExplanation function.
- */
-
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 import { EnrichedEvent } from '@/lib/types';
 
-
+// -----------------------------
+// Input & Output Schemas
+// -----------------------------
 export const ExplanationInputSchema = z.object({
   event: z.custom<EnrichedEvent>(),
   riskScore: z.number(),
@@ -23,42 +17,50 @@ export const ExplanationInputSchema = z.object({
 export type ExplanationInput = z.infer<typeof ExplanationInputSchema>;
 
 export const ExplanationOutputSchema = z.object({
-  detailedExplanation: z.string().describe('A detailed, human-readable explanation of the event and its risk score.'),
+  detailedExplanation: z.string().describe(
+    'A detailed, human-readable explanation of the event and its risk score.'
+  ),
 });
+
 export type ExplanationOutput = z.infer<typeof ExplanationOutputSchema>;
 
-
-const prompt = ai.definePrompt({
+// -----------------------------
+// Define AI Prompt
+// -----------------------------
+const explainableIntelligencePrompt = ai.definePrompt({
   name: 'explainableIntelligencePrompt',
-  input: {schema: ExplanationInputSchema},
-  output: {schema: ExplanationOutputSchema},
-  prompt: `You are a security expert explaining a flagged event to a security analyst.
-  Given the following information about the event, generate a clear and concise explanation of why the event was flagged and its associated risk score.
-  
-  Event:
-  - Description: {{{event.event.details}}}
-  - User: {{{event.user.name}}}
-  - Location: {{{event.location.country}}}
-  - Device Novelty: {{{event.device.isNovel}}}
-  - Location Novelty: {{{event.location.isNovel}}}
-  
-  Analysis:
-  - Risk Score: {{{riskScore}}}
-  - Behavioral Anomaly Score: {{{behavioralAnomalyScore}}}
-  - Behavioral Explanation: {{{behavioralExplanation}}}
+  input: { schema: ExplanationInputSchema },
+  output: { schema: ExplanationOutputSchema },
+  prompt: `
+You are a security analyst AI tasked with explaining flagged events to a human analyst.
+Your task is to produce a clear, concise, human-readable explanation of why the event was flagged and its risk score.
 
-  Generate the 'detailedExplanation' field.
-  `,
+Event Details:
+- Description: {{{event.event.details}}}
+- User: {{{event.user.name}}} (Role: {{{event.user.role}}})
+- Location: {{{event.location.country}}} (Novelty: {{{event.location.isNovel}}})
+- Device Novelty: {{{event.device.isNovel}}}
+
+Analysis Metrics:
+- Risk Score: {{{riskScore}}}
+- Behavioral Anomaly Score: {{{behavioralAnomalyScore}}}
+- Behavioral Explanation: {{{behavioralExplanation}}}
+
+Generate a markdown explanation in the field 'detailedExplanation'.
+`,
 });
 
+// -----------------------------
+// Define the Flow
+// -----------------------------
 export const explainableIntelligenceFlow = ai.defineFlow(
   {
     name: 'explainableIntelligenceFlow',
     inputSchema: ExplanationInputSchema,
     outputSchema: ExplanationOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input: ExplanationInput) => {
+    const { output } = await explainableIntelligencePrompt(input);
     return output!;
   }
 );

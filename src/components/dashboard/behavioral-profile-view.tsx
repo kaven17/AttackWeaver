@@ -14,12 +14,11 @@ const AnomalyMarker = ({ isAnomaly }: { isAnomaly: boolean }) =>
   ) : null;
 
 export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
-  // Gracefully handle cases where behavioral baseline is not available
   if (!threat.isAnalyzed || !threat.behavioralBaseline) {
     return (
-        <div className="text-center text-muted-foreground p-8">
-            <p>Run ThreatLens AI analysis to generate the behavioral profile.</p>
-        </div>
+      <div className="text-center text-muted-foreground p-8">
+        <p>Run ThreatLens AI analysis to generate the behavioral profile.</p>
+      </div>
     );
   }
 
@@ -27,9 +26,15 @@ export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
   const [startHour, endHour] = threat.behavioralBaseline.loginTime.normalRange;
   const isTimeAnomaly = eventHour < startHour || eventHour > endHour;
 
-  // Simple check for deviation, in a real app this would be more complex
-  const isResourceAnomaly = threat.event.type === 'Resource Access' && threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.5;
-  const isApiAnomaly = threat.event.type === 'API Call' && threat.behavioralAnomalyScore && threat.behavioralAnomalyScore > 0.7;
+  const isResourceAnomaly =
+    threat.event.type === 'Resource Access' &&
+    !!threat.behavioralAnomalyScore &&
+    threat.behavioralAnomalyScore > 0.5;
+
+  const isApiAnomaly =
+    threat.event.type === 'API Call' &&
+    !!threat.behavioralAnomalyScore &&
+    threat.behavioralAnomalyScore > 0.7;
 
   return (
     <div className="space-y-4">
@@ -40,7 +45,7 @@ export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="relative">
-          <AnomalyMarker isAnomaly={isTimeAnomaly} />
+          <AnomalyMarker isAnomaly={!!isTimeAnomaly} />
           <div className="text-sm text-muted-foreground">
             Normal hours: {startHour}:00 - {endHour}:00
           </div>
@@ -57,32 +62,41 @@ export function BehavioralProfileView({ threat }: { threat: ProcessedThreat }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="relative">
-            <AnomalyMarker isAnomaly={isResourceAnomaly} />
-            <div className="text-sm text-muted-foreground">
-                Typical first resource: <Badge variant="secondary">/dashboard</Badge>
-            </div>
-            <div className="font-bold text-lg text-foreground">
-                Event Resource: <Badge variant={isResourceAnomaly ? "destructive" : "secondary"}>{threat.event.details.split(' ')[2] || 'N/A'}</Badge>
-            </div>
+          <AnomalyMarker isAnomaly={!!isResourceAnomaly} />
+          <div className="text-sm text-muted-foreground">
+            Typical first resource: <Badge variant="secondary">/dashboard</Badge>
+          </div>
+          <div className="font-bold text-lg text-foreground">
+            Event Resource:{' '}
+            <Badge variant={isResourceAnomaly ? 'destructive' : 'secondary'}>
+              {threat.event.details.split(' ')[2] || 'N/A'}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
 
-        <Card>
-            <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-                <Zap className="h-5 w-5" /> API Call Frequency
-            </CardTitle>
-            </CardHeader>
-            <CardContent className="relative">
-                <AnomalyMarker isAnomaly={isApiAnomaly} />
-                <div className="text-sm text-muted-foreground">
-                    Baseline: ~{threat.behavioralBaseline.apiCallFrequency.mean} calls/hr
-                </div>
-                <div className="font-bold text-lg text-foreground">
-                    Current: {isApiAnomaly ? (threat.behavioralBaseline.apiCallFrequency.mean + threat.behavioralBaseline.apiCallFrequency.stdDev * 3).toFixed(0) : (threat.behavioralBaseline.apiCallFrequency.mean - 2).toFixed(0)} calls/hr (simulated)
-                </div>
-            </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-5 w-5" /> API Call Frequency
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="relative">
+          <AnomalyMarker isAnomaly={!!isApiAnomaly} />
+          <div className="text-sm text-muted-foreground">
+            Baseline: ~{threat.behavioralBaseline.apiCallFrequency.mean} calls/hr
+          </div>
+          <div className="font-bold text-lg text-foreground">
+            Current:{' '}
+            {isApiAnomaly
+              ? (threat.behavioralBaseline.apiCallFrequency.mean +
+                  threat.behavioralBaseline.apiCallFrequency.stdDev * 3
+                ).toFixed(0)
+              : (threat.behavioralBaseline.apiCallFrequency.mean - 2).toFixed(0)}{' '}
+            calls/hr (simulated)
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

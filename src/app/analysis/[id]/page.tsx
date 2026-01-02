@@ -1,183 +1,281 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { ProcessedThreat, AnalyzeThreatOutput } from '@/lib/types';
-import { analyzeThreat } from '@/ai/flows/analyze-threat-flow';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Bot, Zap, ArrowLeft, AlertTriangle } from 'lucide-react';
-import Link from 'next/link';
-import { useToast } from '@/hooks/use-toast';
-import { RiskScoreBadge } from '@/components/dashboard/risk-score-badge';
 
-export default function AnalysisPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+import { use, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Bot, Zap, ArrowLeft } from 'lucide-react';
+
+import { analyzeThreat } from '@/ai/actions/analyzethreat';
+import { ProcessedThreat, AnalyzeThreatOutput, EnrichedEvent } from '@/lib/types';
+
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { RiskScoreBadge } from '@/components/dashboard/risk-score-badge';
+import { useToast } from '@/hooks/use-toast';
+
+interface AnalysisPageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function AnalysisPage({ params }: AnalysisPageProps) {
+  const { id } = use(params);
+
   const [threat, setThreat] = useState<ProcessedThreat | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<AnalyzeThreatOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalyzeThreatOutput | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+
   const { toast } = useToast();
 
+  /* ======================================================
+     LOAD THREAT FROM LOCAL STORAGE
+  ====================================================== */
   useEffect(() => {
-    const storedThreats = localStorage.getItem('processedThreats');
-    if (storedThreats) {
-      const parsedThreats: ProcessedThreat[] = JSON.parse(storedThreats);
-      const foundThreat = parsedThreats.find(t => t.id === id);
-      if (foundThreat) {
-        setThreat(foundThreat);
-        // If analysis was already stored, use it
-        if (foundThreat.isAnalyzed) {
-            setAnalysisResult({
-                riskScore: foundThreat.riskScore || 0,
-                detailedExplanation: foundThreat.detailedExplanation || "",
-                behavioralAnomalyScore: foundThreat.behavioralAnomalyScore || 0,
-                riskBreakdown: foundThreat.riskBreakdown || {ruleBased: 0, contextual: 0, behavioral: 0},
-            })
-        }
-      }
+    console.log('[UI] Loading threat from localStorage');
+
+    const raw = localStorage.getItem('processedThreats');
+    if (!raw) {
+      setLoading(false);
+      return;
     }
-    setIsLoading(false);
+
+    const threats: ProcessedThreat[] = JSON.parse(raw);
+    const found = threats.find(t => t.id === id) ?? null;
+
+    if (!found) {
+      setLoading(false);
+      return;
+    }
+
+    setThreat(found);
+
+    if (found.isAnalyzed && found.riskScore !== null) {
+      console.log('[UI] Threat already analyzed — restoring result');
+      setAnalysis({
+        riskScore: found.riskScore,
+        detailedExplanation: found.detailedExplanation!,
+        behavioralAnomalyScore: found.behavioralAnomalyScore ?? 0,
+        riskBreakdown: found.riskBreakdown ?? {
+          ruleBased: 0,
+          contextual: 0,
+          behavioral: 0,
+        },
+        attackStage: (found as any).attackStage ?? 'Unknown',
+        confidence: (found as any).confidence ?? {
+          confidenceScore: 0,
+          confidenceExplanation: '',
+        },
+      });
+    }
+
+    setLoading(false);
   }, [id]);
 
-  const handleAnalyze = async () => {
-    if (!threat) return;
+  /* ======================================================
+     RUN AI ANALYSIS
+  ====================================================== */
+  async function handleAnalyze() {
+    if (!threat || threat.isAnalyzed) return;
 
-    setIsAnalyzing(true);
+    console.log('==============================');
+    console.log('[UI] User triggered AI analysis');
+    console.log('Threat ID:', threat.id);
+    console.log('==============================');
+
+    const enriched: EnrichedEvent = {
+      id: threat.id,
+      timestamp: threat.timestamp,
+      rawLog: threat.rawLog,
+      user: threat.user,
+      device: threat.device,
+      location: threat.location,
+      event: threat.event,
+      ruleBasedSeverity: threat.ruleBasedSeverity,
+      riskExplanation: threat.riskExplanation,
+      behavioralBaseline: threat.behavioralBaseline,
+    };
+
+    setAnalyzing(true);
+
     try {
-      const result = await analyzeThreat(threat);
-      setAnalysisResult(result);
+      console.log('[UI] Calling analyzeThreat() API...');
+      const result = await analyzeThreat(enriched);
+      console.log('[UI] AI response received:', result);
 
-      // Update the threat in localStorage with the new analysis
-      const storedThreats = localStorage.getItem('processedThreats');
-      if (storedThreats) {
-        let parsedThreats: ProcessedThreat[] = JSON.parse(storedThreats);
-        parsedThreats = parsedThreats.map(t =>
+      setAnalysis(result);
+
+      const raw = localStorage.getItem('processedThreats');
+      if (raw) {
+        const updated = JSON.parse(raw).map((t: ProcessedThreat) =>
           t.id === id
-            ? { ...t, ...result, isAnalyzed: true, riskScore: result.riskScore }
+            ? {
+                ...t,
+                isAnalyzed: true,
+                riskScore: result.riskScore,
+                detailedExplanation: result.detailedExplanation,
+                behavioralAnomalyScore: result.behavioralAnomalyScore,
+                riskBreakdown: result.riskBreakdown,
+                attackStage: result.attackStage,
+                confidence: result.confidence,
+              }
             : t
         );
-        localStorage.setItem('processedThreats', JSON.stringify(parsedThreats));
+        localStorage.setItem('processedThreats', JSON.stringify(updated));
       }
-      toast({
-        title: "AI Analysis Complete",
-        description: "The threat has been successfully analyzed."
-      })
 
-    } catch (error) {
-      console.error("AI Analysis failed:", error);
+      toast({
+        title: 'AI Analysis Complete',
+        description: 'Threat has been analyzed successfully.',
+      });
+    } catch (err) {
+      console.error('[UI] AI Analysis failed:', err);
       toast({
         variant: 'destructive',
-        title: "AI Analysis Failed",
-        description: "Could not get a response from the AI. Please check your API key and network."
-      })
+        title: 'Analysis Failed',
+        description: 'Unable to reach AI backend.',
+      });
     } finally {
-      setIsAnalyzing(false);
+      setAnalyzing(false);
     }
-  };
+  }
 
-  if (isLoading) {
-    return <div className="container mx-auto p-8"><Skeleton className="h-96 w-full" /></div>;
+  /* ======================================================
+     RENDER STATES
+  ====================================================== */
+  if (loading) {
+    return <Skeleton className="h-96 w-full" />;
   }
 
   if (!threat) {
-    return <div className="container mx-auto p-8 text-center text-red-500">Threat not found.</div>;
+    return <div className="text-center text-red-500">Threat not found</div>;
   }
 
-  const displayRiskScore = analysisResult ? analysisResult.riskScore : threat.riskScore;
+  const riskScore = analysis?.riskScore ?? threat.riskScore ?? 0;
 
+  /* ======================================================
+     UI
+  ====================================================== */
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
-        <Button asChild variant="outline">
-          <Link href="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Link>
-        </Button>
-      </div>
+    <div className="container mx-auto p-6 space-y-6">
+      <Button asChild variant="outline">
+        <Link href="/">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Dashboard
+        </Link>
+      </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+        {/* Threat Summary */}
+        <div className="lg:col-span-2">
           <Card>
             <CardHeader>
               <div className="flex items-center gap-4">
-                <RiskScoreBadge score={displayRiskScore} />
-                <CardTitle className="text-2xl">{threat.event.type}</CardTitle>
+                <RiskScoreBadge score={riskScore} />
+                <CardTitle className="text-2xl">
+                  {threat.event.type}
+                </CardTitle>
               </div>
-              <CardDescription className="text-base pt-2">{threat.riskExplanation}</CardDescription>
+              <CardDescription className="pt-2">
+                {threat.riskExplanation}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <pre className="p-4 bg-muted rounded-md text-xs font-code overflow-x-auto">
+              <pre className="bg-muted p-4 rounded-md text-xs overflow-x-auto">
                 {JSON.stringify(threat.rawLog, null, 2)}
               </pre>
             </CardContent>
           </Card>
         </div>
-        
-        <div className="space-y-6">
+
+        {/* AI Analysis */}
+        <div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Bot /> ThreatLens AI™ Analysis
               </CardTitle>
               <CardDescription>
-                Use generative AI to get a deeper analysis of this event.
+                Live AI-driven threat reasoning
               </CardDescription>
             </CardHeader>
+
             <CardContent>
-              {!analysisResult ? (
-                <div className='text-center'>
-                    <Button onClick={handleAnalyze} disabled={isAnalyzing}>
-                      {isAnalyzing ? (
-                        <>
-                          <Zap className="mr-2 h-4 w-4 animate-pulse" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="mr-2 h-4 w-4" />
-                          Run Full Analysis
-                        </>
-                      )}
-                    </Button>
+              {!analysis ? (
+                <div className="text-center">
+                  <Button onClick={handleAnalyze} disabled={analyzing}>
+                    {analyzing ? (
+                      <>
+                        <Zap className="mr-2 h-4 w-4 animate-pulse" />
+                        Analyzing…
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Run Full Analysis
+                      </>
+                    )}
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold mb-2">AI Explanation</h4>
-                    <p className="text-sm text-muted-foreground bg-background p-3 rounded-md border">
-                        {analysisResult.detailedExplanation}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold mb-2">Risk Breakdown</h4>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                            <div className="text-2xl font-bold">{analysisResult.riskBreakdown.ruleBased}</div>
-                            <div className="text-xs text-muted-foreground">Rule-Based</div>
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">{analysisResult.riskBreakdown.contextual}</div>
-                            <div className="text-xs text-muted-foreground">Contextual</div>
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">{analysisResult.riskBreakdown.behavioral}</div>
-                            <div className="text-xs text-muted-foreground">Behavioral</div>
-                        </div>
+                  <Section title="AI Explanation">
+                    {analysis.detailedExplanation}
+                  </Section>
+
+                  <Section title="Attack Stage">
+                    {analysis.attackStage}
+                  </Section>
+
+                  <Section title="Risk Breakdown">
+                    <div className="grid grid-cols-3 text-center">
+                      <Metric label="Rule-Based" value={analysis.riskBreakdown.ruleBased} />
+                      <Metric label="Contextual" value={analysis.riskBreakdown.contextual} />
+                      <Metric label="Behavioral" value={analysis.riskBreakdown.behavioral} />
                     </div>
-                  </div>
-                   <div>
-                    <h4 className="font-semibold mb-2">Behavioral Anomaly Score</h4>
-                    <p className="text-2xl font-bold font-mono text-center p-2 bg-background rounded-md border">
-                        {analysisResult.behavioralAnomalyScore.toFixed(2)}
-                    </p>
-                  </div>
+                  </Section>
+
+                  <Section title="Behavioral Anomaly Score">
+                    {analysis.behavioralAnomalyScore.toFixed(2)}
+                  </Section>
+
+                  <Section title="Confidence">
+                    {analysis.confidence.confidenceScore} — {analysis.confidence.confidenceExplanation}
+                  </Section>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ======================================================
+   SMALL UI HELPERS
+====================================================== */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h4 className="font-semibold mb-2">{title}</h4>
+      <div className="text-sm bg-background p-3 rounded-md border text-center">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-xs text-muted-foreground">{label}</div>
     </div>
   );
 }

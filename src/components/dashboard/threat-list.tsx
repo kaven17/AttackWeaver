@@ -1,5 +1,11 @@
 'use client';
 
+import { ProcessedThreat } from '@/lib/types';
+import { formatDistanceToNow } from 'date-fns';
+import { RiskScoreBadge } from './risk-score-badge';
+import { cn } from '@/lib/utils';
+import { CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { ScrollArea } from '../ui/scroll-area';
 import {
   Table,
   TableBody,
@@ -8,12 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { ProcessedThreat } from '@/lib/types';
-import { formatDistanceToNow } from 'date-fns';
-import { RiskScoreBadge } from './risk-score-badge';
-import { cn } from '@/lib/utils';
-import { CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { ScrollArea } from '../ui/scroll-area';
 
 type ThreatListProps = {
   threats: ProcessedThreat[];
@@ -26,6 +26,17 @@ export function ThreatList({
   onSelectThreat,
   selectedThreatId,
 }: ThreatListProps) {
+  if (threats.length === 0) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        No security events detected in the last 7 days.
+      </div>
+    );
+  }
+
+  // Sort by riskScore descending by default
+  const sortedThreats = [...threats].sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+
   return (
     <>
       <CardHeader>
@@ -34,6 +45,7 @@ export function ThreatList({
           {threats.length} events detected in the last 7 days.
         </CardDescription>
       </CardHeader>
+
       <div className="relative flex-1 h-96">
         <ScrollArea className="absolute inset-0 h-full">
           <Table>
@@ -45,35 +57,43 @@ export function ThreatList({
                 <TableHead className="text-right">Time</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
-              {threats.map(threat => (
+              {sortedThreats.map((threat) => (
                 <TableRow
                   key={threat.id}
                   onClick={() => onSelectThreat(threat)}
                   className={cn(
-                    'cursor-pointer',
-                    selectedThreatId === threat.id && 'bg-muted/50'
+                    'cursor-pointer transition-colors hover:bg-muted/30',
+                    selectedThreatId === threat.id && 'bg-muted/50',
+                    threat.isAnalyzed ? 'opacity-100' : 'opacity-70'
                   )}
                 >
+                  {/* Risk Score */}
                   <TableCell>
-                    <RiskScoreBadge score={threat.riskScore} />
+                    <RiskScoreBadge score={threat.riskScore ?? 0} />
                   </TableCell>
+
+                  {/* Event */}
                   <TableCell>
                     <div className="font-medium">{threat.event.type}</div>
-                    <div className="hidden text-sm text-muted-foreground md:inline">
+                    <div
+                      className="hidden md:inline text-sm text-muted-foreground truncate max-w-xs"
+                      title={threat.event.details}
+                    >
                       {threat.event.details}
                     </div>
                   </TableCell>
+
+                  {/* User */}
                   <TableCell>
                     <div>{threat.user.name}</div>
-                    <div className="text-muted-foreground">
-                      {threat.user.role}
-                    </div>
+                    <div className="text-muted-foreground">{threat.user.role}</div>
                   </TableCell>
+
+                  {/* Timestamp */}
                   <TableCell className="text-right text-muted-foreground">
-                    {formatDistanceToNow(new Date(threat.timestamp), {
-                      addSuffix: true,
-                    })}
+                    {formatDistanceToNow(new Date(threat.timestamp), { addSuffix: true })}
                   </TableCell>
                 </TableRow>
               ))}

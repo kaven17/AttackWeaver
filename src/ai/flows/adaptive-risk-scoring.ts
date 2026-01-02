@@ -1,90 +1,90 @@
 'use server';
 
-/**
- * @fileOverview Implements adaptive risk scoring based on rule-based severity, anomaly scores, and behavioral deviations.
- *
- * Exports:
- * - `calculateAdaptiveRiskScore` - Function to calculate the risk score.
- * - `AdaptiveRiskScoreInput` - Input type for the risk scoring function.
- * - `AdaptiveRiskScoreOutput` - Output type for the risk scoring function.
- */
+import { ai } from '@/ai/genkit';
+import { z } from 'zod';
+import { EnrichedEvent } from '@/lib/types';
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-// Define schemas for input and output
-const AdaptiveRiskScoreInputSchema = z.object({
+// -----------------------------
+// Input schema for adaptive risk scoring
+// -----------------------------
+export const AdaptiveRiskScoreInputSchema = z.object({
   ruleBasedSeverity: z
     .number()
-    .describe('Severity score based on predefined rules (e.g., 1-10)'),
+    .describe('Severity score based on predefined rules (1-10)'),
   contextualAnomalyScore: z
     .number()
-    .describe('Anomaly score derived from contextual analysis (e.g., 0-1)'),
+    .describe('Anomaly score derived from contextual/contextual analysis (0-1)'),
   behavioralDeviationScore: z
     .number()
-    .describe(
-      'Score indicating deviation from established behavioral patterns (e.g., 0-1)'
-    ),
+    .describe('Score indicating deviation from behavioral baseline (0-1)'),
   feedbackScoreAdjustment: z
     .number()
     .optional()
     .describe(
-      'Adjustment to the risk score based on feedback; positive for confirmed alerts, negative for ignored alerts (e.g., -0.1 to 0.1)'
+      'Adjustment from feedback: positive for confirmed alerts, negative for ignored alerts (-0.1 to 0.1)'
     ),
 });
 
 export type AdaptiveRiskScoreInput = z.infer<typeof AdaptiveRiskScoreInputSchema>;
 
-const AdaptiveRiskScoreOutputSchema = z.object({
+// -----------------------------
+// Output schema
+// -----------------------------
+export const AdaptiveRiskScoreOutputSchema = z.object({
   riskScore: z
     .number()
     .describe(
-      'The calculated risk score (0-100), combining severity, anomaly scores, and feedback adjustments'
+      'Final adaptive risk score (0-100) combining severity, anomaly, and feedback'
     ),
   explanation: z
     .string()
-    .describe(
-      'Human-readable explanation of the risk score, detailing contributing factors'
-    ),
+    .describe('Human-readable explanation of how the score was derived'),
 });
 
 export type AdaptiveRiskScoreOutput = z.infer<typeof AdaptiveRiskScoreOutputSchema>;
 
-// Exported function to calculate adaptive risk score
-export async function calculateAdaptiveRiskScore(
-  input: AdaptiveRiskScoreInput
-): Promise<AdaptiveRiskScoreOutput> {
-  return adaptiveRiskScoringFlow(input);
-}
-
+// -----------------------------
+// Define the prompt
+// -----------------------------
 const adaptiveRiskScoringPrompt = ai.definePrompt({
   name: 'adaptiveRiskScoringPrompt',
-  input: {schema: AdaptiveRiskScoreInputSchema},
-  output: {schema: AdaptiveRiskScoreOutputSchema},
-  prompt: `You are an AI Threat Analyst, and calculate the risk score of a security event and explain the risk.
+  input: { schema: AdaptiveRiskScoreInputSchema },
+  output: { schema: AdaptiveRiskScoreOutputSchema },
+  prompt: `
+You are a cybersecurity AI analyst. Your task is to calculate the adaptive risk score for a security event.
 
-  Combine the rule-based severity, contextual anomaly scores, and behavioral deviation scores to calculate a risk score (0-100).
-  Also take into consideration feedback adjustments from confirmed/ignored alerts.
+Combine the following:
+- Rule-Based Severity: {{{ruleBasedSeverity}}}
+- Contextual Anomaly Score: {{{contextualAnomalyScore}}}
+- Behavioral Deviation Score: {{{behavioralDeviationScore}}}
+- Feedback Score Adjustment: {{{feedbackScoreAdjustment}}}
 
-  Rule-Based Severity: {{{ruleBasedSeverity}}}
-  Contextual Anomaly Score: {{{contextualAnomalyScore}}}
-  Behavioral Deviation Score: {{{behavioralDeviationScore}}}
-  Feedback Score Adjustment: {{{feedbackScoreAdjustment}}}
-
-  Output the risk score (0-100) and a clear, human-readable explanation for each flagged event, detailing the causal and contextual factors contributing to the risk score.
-  `,
+Output:
+1. riskScore (0-100)
+2. A clear, human-readable explanation of why this score was given, detailing all contributing factors.
+`,
 });
 
-// Define the Genkit flow
+// -----------------------------
+// Define the flow
+// -----------------------------
 export const adaptiveRiskScoringFlow = ai.defineFlow(
   {
     name: 'adaptiveRiskScoringFlow',
     inputSchema: AdaptiveRiskScoreInputSchema,
     outputSchema: AdaptiveRiskScoreOutputSchema,
   },
-  async input => {
-    // Call the prompt and return the output
-    const {output} = await adaptiveRiskScoringPrompt(input);
+  async (input: AdaptiveRiskScoreInput) => {
+    const { output } = await adaptiveRiskScoringPrompt(input);
     return output!;
   }
 );
+
+// -----------------------------
+// Convenience wrapper
+// -----------------------------
+export async function calculateAdaptiveRiskScore(
+  input: AdaptiveRiskScoreInput
+): Promise<AdaptiveRiskScoreOutput> {
+  return adaptiveRiskScoringFlow(input);
+}
