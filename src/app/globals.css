@@ -88,3 +88,33 @@
     @apply bg-background text-foreground;
   }
 }
+/* Horizontal scrollbar styling (for x-scroll areas only) */
+.scroll-x::-webkit-scrollbar {
+  height: 4px;
+}
+.scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-x::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 9999px;
+}
+
+/* Hide vertical scrollbar but KEEP scrolling */
+body {
+  -ms-overflow-style: none;     /* IE/Edge */
+  scrollbar-width: none;        /* Firefox */
+}
+
+body::-webkit-scrollbar {
+  display: none;                /* Chrome/Safari */
+}
+
+/* Optional: utility for specific elements */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

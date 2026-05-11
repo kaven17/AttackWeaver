@@ -47,14 +47,15 @@ export function ThreatList({
       </CardHeader>
 
       <div className="relative flex-1 h-96">
-        <ScrollArea className="absolute inset-0 h-full">
-          <Table>
+        <ScrollArea className="absolute inset-0 h-full w-full">
+          <div className="min-w-[900px]">
+  <Table className="min-w-max">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Score</TableHead>
-                <TableHead>Event</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead className="text-right">Time</TableHead>
+<TableHead className="w-[100px] whitespace-nowrap">Score</TableHead>
+<TableHead className="min-w-[300px] whitespace-nowrap">Event</TableHead>
+<TableHead className="min-w-[180px] whitespace-nowrap">User</TableHead>
+<TableHead className="min-w-[140px] whitespace-nowrap text-right">Time</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -70,12 +71,12 @@ export function ThreatList({
                   )}
                 >
                   {/* Risk Score */}
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <RiskScoreBadge score={threat.riskScore ?? 0} />
                   </TableCell>
 
                   {/* Event */}
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <div className="font-medium">{threat.event.type}</div>
                     <div
                       className="hidden md:inline text-sm text-muted-foreground truncate max-w-xs"
@@ -86,19 +87,20 @@ export function ThreatList({
                   </TableCell>
 
                   {/* User */}
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <div>{threat.user.name}</div>
                     <div className="text-muted-foreground">{threat.user.role}</div>
                   </TableCell>
 
                   {/* Timestamp */}
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="text-right text-muted-foreground whitespace-nowrap">
                     {formatDistanceToNow(new Date(threat.timestamp), { addSuffix: true })}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+</div>
         </ScrollArea>
       </div>
     </>

@@ -1,356 +1,230 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { ShieldHalf } from 'lucide-react';
-import { FC, useMemo, useRef, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Plane } from '@react-three/drei';
-import * as THREE from 'three';
+import { ShieldHalf, Terminal, Wifi, Activity, Lock } from 'lucide-react';
+import { FC, useRef, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(false);
+
+// ── Typewriter ──────────────────────────────────────────────────────────────
+const PHRASES = [
+  'Reconstructing Attack Chains...',
+  'Correlating 1.2M Alerts...',
+  'Mapping Lateral Movement...',
+  'Scoring Threat Vectors...',
+  'Auditing Trust Identities...',
+];
+
+const Typewriter: FC = () => {
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [displayed, setDisplayed] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    const checkIsMobile = () => {
-      const userAgent = navigator.userAgent;
-      const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const isSmallScreen = window.innerWidth <= 768;
-      
-      setIsMobile(mobileRegex.test(userAgent) || (isTouchDevice && isSmallScreen));
-    };
-
-    checkIsMobile();
-    window.addEventListener('resize', checkIsMobile);
-    
-    return () => window.removeEventListener('resize', checkIsMobile);
-  }, []);
-
-  return isMobile;
-};
-
-const MAX_STEPS = 128;
-const PRECISION = 0.0005;
-
-type AnimationState = {
-  positions: THREE.Vector3[];
-  rotations: THREE.Vector3[];
-  baseOffsets: {
-    x: number;
-    y: number;
-    posSpeed: THREE.Vector3;
-    rotSpeed: THREE.Vector3;
-    posPhase: THREE.Vector3;
-    rotPhase: THREE.Vector3;
-  }[];
-};
-
-const createInitialState = (amount: number): AnimationState => ({
-  positions: Array.from({ length: amount }, () => new THREE.Vector3(0, 0, 0)),
-  rotations: Array.from({ length: amount }, () => new THREE.Vector3(0, 0, 0)),
-  baseOffsets: Array.from({ length: amount }, (_, i) => {
-    const t = (i / amount) * Math.PI * 2;
-    return {
-      x: Math.cos(t) * 1.75,
-      y: Math.sin(t) * 4.5,
-      posSpeed: new THREE.Vector3(
-        1.0 + Math.random() * 4,
-        1.0 + Math.random() * 3.5,
-        0.5 + Math.random() * 2.0
-      ),
-      rotSpeed: new THREE.Vector3(
-        0.1 + Math.random() * 1,
-        0.1 + Math.random() * 1,
-        0.1 + Math.random() * 1
-      ),
-      posPhase: new THREE.Vector3(
-        t + Math.random() * Math.PI * 3.0,
-        t * 1.3 + Math.random() * Math.PI * 3.0,
-        t * 0.7 + Math.random() * Math.PI * 3.0
-      ),
-      rotPhase: new THREE.Vector3(
-        t * 0.5 + Math.random() * Math.PI * 2.0,
-        t * 0.8 + Math.random() * Math.PI * 2.0,
-        t * 1.1 + Math.random() * Math.PI * 2.0
-      )
-    };
-  })
-});
-
-const GLSL_ROTATE = `
-mat4 rotationMatrix(vec3 axis, float angle) {
-  axis = normalize(axis);
-  float s = sin(angle);
-  float c = cos(angle);
-  float oc = 1.0 - c;
-  
-  return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
-              oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
-              oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
-              0.0,                                0.0,                                0.0,                                1.0);
-}
-
-vec3 rotate(vec3 v, vec3 axis, float angle) {
-  mat4 m = rotationMatrix(axis, angle);
-  return (m * vec4(v, 1.0)).xyz;
-}
-`;
-
-const GLSL_SDF = `
-float sdBox( vec3 p, vec3 b ) {
-  vec3 q = abs(p) - b;
-  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
-}
-`;
-
-const GLSL_OPERATIONS = `
-float opSmoothUnion( float d1, float d2, float k ) {
-  float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
-  return mix( d2, d1, h ) - k*h*(1.0-h);
-}
-`;
-
-const vertexShader = `
-varying vec2 v_uv;
-
-void main() {
-  v_uv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const createFragmentShader = (amount: number) => `
-uniform float u_time;
-uniform float u_aspect;
-uniform vec3 u_positions[${amount}];
-uniform vec3 u_rotations[${amount}];
-varying vec2 v_uv;
-
-const int MaxCount = ${amount};
-
-${GLSL_SDF}
-${GLSL_OPERATIONS}
-${GLSL_ROTATE}
-
-float sdf(vec3 p) {
-  vec3 correct = 0.1 * vec3(u_aspect, 1.0, 1.0);
-
-  vec3 tp = p + -u_positions[0] * correct;
-  vec3 rp = tp;
-  rp = rotate(rp, vec3(1.0, 1.0, 0.0), u_rotations[0].x + u_rotations[0].y);
-  float final = sdBox(rp, vec3(0.15)) - 0.03;
-  
-  for(int i = 1; i < MaxCount; i++) {
-    tp = p + -u_positions[i] * correct;
-    rp = tp;
-    rp = rotate(rp, vec3(1.0, 1.0, 0.0), u_rotations[i].x + u_rotations[i].y);
-    float box = sdBox(rp, vec3(0.15)) - 0.03;
-    final = opSmoothUnion(final, box, 0.4);
-  }
-
-  return final;
-}
-
-vec3 calcNormal(in vec3 p) {
-  const float h = 0.001;
-  return normalize(vec3(
-    sdf(p + vec3(h, 0, 0)) - sdf(p - vec3(h, 0, 0)),
-    sdf(p + vec3(0, h, 0)) - sdf(p - vec3(0, h, 0)),
-    sdf(p + vec3(0, 0, h)) - sdf(p - vec3(0, 0, h))
-  ));
-}
-
-vec3 getIridescence(vec3 normal, vec3 viewDir, float time) {
-  float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0);
-  float hue = dot(normal, viewDir) * 3.14159 + time * 0.5;
-  
-  vec3 greenShades = vec3(
-    0.0,
-    sin(hue) * 0.3 + 0.7,
-    sin(hue + 1.0) * 0.2 + 0.3
-  );
-  
-  return greenShades * fresnel * 1.2;
-}
-
-void main() {
-  vec2 centeredUV = (v_uv - 0.5) * vec2(u_aspect, 1.0);
-  vec3 ray = normalize(vec3(centeredUV, -1.0));
-  
-  vec3 camPos = vec3(0.0, 0.0, 2.3);
-
-  vec3 rayPos = camPos;
-  float totalDist = 0.0;
-  float tMax = 5.0;
-
-  for(int i = 0; i < ${MAX_STEPS}; i++) {
-    float dist = sdf(rayPos);
-
-    if (dist < ${PRECISION} || tMax < totalDist) break;
-
-    totalDist += dist;
-    rayPos = camPos + totalDist * ray;
-  }
-
-  vec3 color = vec3(0.0);
-  float alpha = 0.0;
-
-  if(totalDist < tMax) {
-    vec3 normal = calcNormal(rayPos);
-    vec3 viewDir = normalize(camPos - rayPos);
-    
-    vec3 lightDir = normalize(vec3(-0.5, 0.8, 0.6));
-    float diff = max(dot(normal, lightDir), 0.0);
-    
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(normal, halfDir), 0.0), 32.0);
-    
-    vec3 iridescent = getIridescence(normal, viewDir, u_time);
-    
-    float rimLight = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
-    vec3 rimColor = vec3(0.4, 0.8, 1.0) * rimLight * 0.5;
-    
-    float ao = 1.0 - smoothstep(0.0, 0.3, totalDist / tMax);
-    
-    vec3 baseColor = vec3(0.1, 0.12, 0.15);
-    color = baseColor * (0.1 + diff * 0.4) * ao;
-    color += iridescent * (0.8 + diff * 0.2);
-    color += vec3(1.0, 0.9, 0.8) * spec * 0.6;
-    color += rimColor;
-    
-    float fog = 1.0 - exp(-totalDist * 0.2);
-    color = mix(color, vec3(0.0), fog * 0.3);
-
-    alpha = 1.0;
-  }
-
-  gl_FragColor = vec4(color, alpha);
-}`;
-
-interface ScreenPlaneProps {
-  animationState: AnimationState;
-  amount: number;
-}
-
-const ScreenPlane: FC<ScreenPlaneProps> = ({ animationState, amount }) => {
-  const { viewport } = useThree();
-  const materialRef = useRef<THREE.ShaderMaterial>(null!);
-
-  const uniforms = useMemo(() => ({
-    u_time: { value: 0 },
-    u_aspect: { value: viewport.width / viewport.height },
-    u_positions: { value: animationState.positions },
-    u_rotations: { value: animationState.rotations },
-  }), [viewport.width, viewport.height, animationState.positions, animationState.rotations]);
-
-  useFrame((_, delta) => {
-    if (materialRef.current) {
-      materialRef.current.uniforms.u_time.value += delta;
-      const time = materialRef.current.uniforms.u_time.value;
-      
-      animationState.baseOffsets.forEach((offset, i) => {
-        const wanderX = Math.sin(time * offset.posSpeed.x + offset.posPhase.x) * 0.8;
-        const wanderY = Math.cos(time * offset.posSpeed.y + offset.posPhase.y) * 5;
-        const wanderZ = Math.sin(time * offset.posSpeed.z + offset.posPhase.z) * 0.5;
-        
-        const secondaryX = Math.cos(time * offset.posSpeed.x * 0.7 + offset.posPhase.x * 1.3) * 0.4;
-        const secondaryY = Math.sin(time * offset.posSpeed.y * 0.8 + offset.posPhase.y * 1.1) * 0.3;
-        
-        animationState.positions[i].set(
-          offset.x + wanderX + secondaryX,
-          offset.y + wanderY + secondaryY,
-          wanderZ
-        );
-        
-        animationState.rotations[i].set(
-          time * offset.rotSpeed.x + offset.rotPhase.x,
-          time * offset.rotSpeed.y + offset.rotPhase.y,
-          time * offset.rotSpeed.z + offset.rotPhase.z
-        );
-        
-        materialRef.current!.uniforms.u_positions.value[i].copy(animationState.positions[i]);
-        materialRef.current!.uniforms.u_rotations.value[i].copy(animationState.rotations[i]);
-      });
+    const phrase = PHRASES[phraseIdx];
+    let timeout: ReturnType<typeof setTimeout>;
+    if (!deleting && displayed.length < phrase.length) {
+      timeout = setTimeout(() => setDisplayed(phrase.slice(0, displayed.length + 1)), 55);
+    } else if (!deleting && displayed.length === phrase.length) {
+      timeout = setTimeout(() => setDeleting(true), 1800);
+    } else if (deleting && displayed.length > 0) {
+      timeout = setTimeout(() => setDisplayed(displayed.slice(0, -1)), 28);
+    } else if (deleting && displayed.length === 0) {
+      setDeleting(false);
+      setPhraseIdx((i) => (i + 1) % PHRASES.length);
     }
-  });
+    return () => clearTimeout(timeout);
+  }, [displayed, deleting, phraseIdx]);
 
   return (
-    <Plane args={[1, 1]} scale={[viewport.width, viewport.height, 1]}>
-      <shaderMaterial
-        ref={materialRef}
-        uniforms={uniforms}
-        vertexShader={vertexShader}
-        fragmentShader={createFragmentShader(amount)}
-        transparent={true}
-      />
-    </Plane>
-  );
-};
-
-const Scene: FC = () => {
-  const isMobile = useIsMobile();
-  const amount = isMobile ? 3 : 4;
-  const [animationState] = useState<AnimationState>(() => createInitialState(amount));
-  
-  const cameraConfig = useMemo(() => ({
-    position: [0, 0, 15] as [number, number, number],
-    fov: 50,
-    near: 0.1,
-    far: 2000,
-  }), []);
-
-  return (
-    <div className='absolute inset-0 w-full h-full'>
-      <Canvas
-        camera={cameraConfig}
-        dpr={1}
-        frameloop="always"
-        gl={{ 
-          alpha: true,
-          antialias: !isMobile,
-          powerPreference: "high-performance"
-        }}
-      >
-        <ScreenPlane animationState={animationState} amount={amount} />
-      </Canvas>
+    <div className="font-mono text-sm text-emerald-400/80 flex items-center gap-2 mt-3">
+      <span className="text-emerald-500">$</span>
+      <span>{displayed}</span>
+      <span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse" />
     </div>
   );
 };
 
-export function Hero() {
-  const scrollToDashboard = () => {
-    const dashboard = document.getElementById('dashboard');
-    if (dashboard) {
-      dashboard.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
+// ── Scrolling Threat Feed ────────────────────────────────────────────────────
+const THREAT_ITEMS = [
+  { icon: <Terminal className="w-3 h-3" />, label: 'MITRE ATT&CK', value: 'T1059.001 — PowerShell' },
+  { icon: <Wifi className="w-3 h-3" />, label: 'Lateral Move', value: '192.168.1.4 → DC-01' },
+  { icon: <Activity className="w-3 h-3" />, label: 'Blast Radius', value: '14 assets at risk' },
+  { icon: <Lock className="w-3 h-3" />, label: 'Trust Score', value: 'jsmith@corp — 12/100' },
+  { icon: <ShieldHalf className="w-3 h-3" />, label: 'Stage', value: 'Lateral Movement' },
+  { icon: <Terminal className="w-3 h-3" />, label: 'EDR Alert', value: 'Credential Dump Detected' },
+  { icon: <Wifi className="w-3 h-3" />, label: 'Firewall', value: 'Outbound C2 — Blocked' },
+  { icon: <Activity className="w-3 h-3" />, label: 'Confidence', value: 'Critical — 97%' },
+];
+
+const ThreatFeed: FC = () => {
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // Duplicate items for seamless loop
+  const items = [...THREAT_ITEMS, ...THREAT_ITEMS];
 
   return (
-    <section className="relative h-screen w-full flex items-center justify-center bg-gradient-to-b from-neutral-950 to-green-900 overflow-hidden">
-      {/* 3D Animated Background */}
-      <Scene />
-      
-      {/* Background Grid - now with reduced opacity to show 3D scene */}
-      <div className="absolute inset-0 h-full w-full bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:72px_72px] pointer-events-none"></div>
-      
-      {/* Radial Gradient Overlay */}
-      <div className="absolute inset-0 h-full w-full bg-[radial-gradient(circle_at_center,rgba(16,128,62,0.2)_0%,transparent_50%)] pointer-events-none"></div>
+    <div className="relative w-full overflow-hidden mt-10 border-y border-emerald-900/40">
+      {/* fade edges */}
+      <div className="absolute left-0 top-0 h-full w-20 z-10 bg-gradient-to-r from-neutral-950 to-transparent pointer-events-none" />
+      <div className="absolute right-0 top-0 h-full w-20 z-10 bg-gradient-to-l from-neutral-950 to-transparent pointer-events-none" />
 
-      {/* Content */}
-      <div className="relative z-10 flex flex-col items-center text-center p-4">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 shadow-lg backdrop-blur-sm">
-          <ShieldHalf className="h-8 w-8 text-primary" />
-        </div>
-        <h1 className="font-headline text-5xl md:text-7xl font-bold tracking-tighter text-foreground drop-shadow-lg">
-          ThreatX
-        </h1>
-        <p className="mt-4 max-w-2xl text-lg md:text-xl text-muted-foreground drop-shadow-md">
-          An advanced, AI-powered threat intelligence platform that transforms raw security logs into actionable, explainable insights.
-        </p>
-        <Button onClick={scrollToDashboard} className="mt-8" size="lg">
-          View Dashboard
-        </Button>
+      <div
+        ref={trackRef}
+        className="flex gap-4 py-3 w-max"
+        style={{ animation: 'scrollX 28s linear infinite' }}
+      >
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-emerald-900/50 bg-emerald-950/30 backdrop-blur-sm whitespace-nowrap flex-shrink-0"
+          >
+            <span className="text-emerald-500">{item.icon}</span>
+            <span className="text-emerald-600/70 font-mono text-xs">{item.label}:</span>
+            <span className="text-emerald-300 font-mono text-xs">{item.value}</span>
+          </div>
+        ))}
       </div>
+
+      <style>{`
+        @keyframes scrollX {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// ── Stats Bar ────────────────────────────────────────────────────────────────
+const STATS = [
+  { label: 'Alerts Processed', value: '2.4M' },
+  { label: 'Incidents Correlated', value: '1,847' },
+  { label: 'Avg Response Time', value: '4.2s' },
+  { label: 'Threats Neutralised', value: '99.1%' },
+];
+
+const StatsBar: FC = () => (
+  <div className="flex gap-6 overflow-x-auto pb-1 scroll-x mt-8 justify-center flex-wrap md:flex-nowrap">
+    {STATS.map((s, i) => (
+      <div key={i} className="flex-shrink-0 text-center px-5 py-3 rounded-lg border border-emerald-900/40 bg-black/30 backdrop-blur-sm">
+        <div className="font-mono text-2xl font-bold text-emerald-400">{s.value}</div>
+        <div className="text-xs text-emerald-700 mt-0.5 uppercase tracking-widest">{s.label}</div>
+      </div>
+    ))}
+  </div>
+);
+
+// ── Agent Pills ──────────────────────────────────────────────────────────────
+const AGENTS = [
+  'Signal Fusion',
+  'Attack Path',
+  'Response Agent',
+  'Trust Auditor',
+];
+
+const AgentPills: FC = () => (
+  <div className="flex gap-2 overflow-x-auto scroll-x pb-1 mt-5 justify-center flex-wrap">
+    {AGENTS.map((a, i) => (
+      <div
+        key={i}
+        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-800/50 bg-emerald-950/40 backdrop-blur-sm"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
+        <span className="font-mono text-xs text-emerald-400">{a}</span>
+      </div>
+    ))}
+  </div>
+);
+
+// ── Hero ─────────────────────────────────────────────────────────────────────
+export function Hero() {
+  const scrollToDashboard = () => {
+    document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth' });
+  };
+  const router = useRouter(); // ✅ inside component
+
+  return (
+    <section className="relative h-screen w-full flex flex-col items-center justify-center overflow-hidden ">
+      {/* 3D scene — always on top of solid bg, below everything else */}
+      
+
+      {/* Subtle scanline overlay — very low opacity so 3D shows through */}
+      <div
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)',
+        }}
+      />
+
+      {/* Vignette — edges only, centre clear */}
+      <div
+        className="absolute inset-0 pointer-events-none z-[1]"
+        style={{
+          background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)',
+        }}
+      />
+
+      {/* Content — sits above scene */}
+      <div className="relative z-10 flex flex-col items-center text-center px-4 w-full max-w-3xl mx-auto">
+
+        {/* Badge */}
+        <div className="mb-5 flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-800/60 bg-emerald-950/50 backdrop-blur-md">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-mono text-xs text-emerald-400 uppercase tracking-widest">Blue-Team Co-Pilot · Active</span>
+        </div>
+
+        {/* Shield icon */}
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-emerald-700/40 bg-emerald-950/60 backdrop-blur-sm shadow-[0_0_24px_rgba(52,211,153,0.15)]">
+          <ShieldHalf className="h-7 w-7 text-emerald-400" />
+        </div>
+
+        {/* Title */}
+        <h1
+          className="font-mono text-5xl md:text-7xl font-bold tracking-tighter text-white"
+          style={{ textShadow: '0 0 40px rgba(52,211,153,0.3), 0 0 80px rgba(52,211,153,0.1)' }}
+        >
+          Attack<span className="text-emerald-400">Weaver</span>
+        </h1>
+
+        {/* Typewriter */}
+        <Typewriter />
+
+        {/* Subtitle */}
+        <p className="mt-5 max-w-xl text-sm md:text-base text-neutral-400 leading-relaxed font-mono">
+          Multi-agent AI that reconstructs attack chains from raw telemetry —
+          <span className="text-emerald-400/80"> signal fusion, path simulation, response ranking, trust auditing</span>
+          {' '}in parallel.
+        </p>
+
+        {/* Agent pills */}
+        <AgentPills />
+        
+        {/* CTA */}
+        <div className="mt-8 flex gap-3">
+  <button
+    onClick={() => router.push('/ingest')}
+    className="px-6 py-2.5 rounded-lg font-mono text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-black transition-all duration-150 shadow-[0_0_20px_rgba(52,211,153,0.35)] hover:shadow-[0_0_32px_rgba(52,211,153,0.55)]"
+  >
+    Upload Logs →
+  </button>
+
+  <button className="px-6 py-2.5 rounded-lg font-mono text-sm font-semibold border border-emerald-800/60 bg-black/30 text-emerald-400 hover:bg-emerald-950/60 backdrop-blur-sm transition-all duration-150">
+    Scroll to Dashboard
+  </button>
+</div>
+      </div>
+
+      {/* Scrolling threat feed — pinned to bottom, z above scene */}
+      <div className="absolute bottom-0 left-0 right-0 z-10">
+        <ThreatFeed />
+      </div>
+
+      {/* Scrollbar styles for horizontal scroll elements */}
+      <style>{`
+        .scroll-x::-webkit-scrollbar { height: 3px; }
+        .scroll-x::-webkit-scrollbar-track { background: transparent; }
+        .scroll-x::-webkit-scrollbar-thumb { background: #065f46; border-radius: 9999px; }
+      `}</style>
     </section>
   );
 }

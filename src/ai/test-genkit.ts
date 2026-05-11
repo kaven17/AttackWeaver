@@ -36,9 +36,9 @@ const testEvent: EnrichedEvent = {
 (async () => {
   try {
     const result = await analyzeThreatFlow(testEvent);
-    console.log('===== ThreatX Output =====');
+    console.log('=====  Output =====');
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {
-    console.error('Error running ThreatX flow:', err);
+    console.error('Error running  flow:', err);
   }
 })();

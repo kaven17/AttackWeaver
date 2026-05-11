@@ -1,15 +1,14 @@
+
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { runBertSemanticAnalysis } from '@/ai/bert';
 import { EnrichedEvent } from '@/lib/types';
 import fetch from 'node-fetch';
-import 'server-only';
-import { googleAI } from '@genkit-ai/google-genai';
-
 
 /* ======================================================
-   CANONICAL TYPES
+   TYPES
 ====================================================== */
+
 type CanonicalEventType =
   | 'PRIVILEGE_ESCALATION'
   | 'LOGIN_ATTEMPT'
@@ -28,9 +27,6 @@ export const AttackStageSchema = z.enum([
 ]);
 export type AttackStage = z.infer<typeof AttackStageSchema>;
 
-/* ======================================================
-   SCHEMAS
-====================================================== */
 export const AnalyzeThreatInputSchema = z.custom<EnrichedEvent>();
 export type AnalyzeThreatInput = EnrichedEvent;
 
@@ -57,6 +53,7 @@ export const UnifiedThreatAnalysisOutputSchema = z.object({
     ipReputationScore: z.number(),
   }),
 });
+
 export type UnifiedThreatAnalysisOutput =
   z.infer<typeof UnifiedThreatAnalysisOutputSchema>;
 
@@ -71,36 +68,11 @@ export type BertSemanticSignals = {
   targetPrivilege: 'low' | 'medium' | 'high';
   confidence: number;
 };
-/* ======================================================
-   ATTACK STAGE (RULE-BASED → AI FALLBACK)
-====================================================== */
-async function inferAttackStage(
-  event: EnrichedEvent,
-  bert: BertSemanticSignals
-): Promise<AttackStage> {
-  const canonical = normalizeEventType(event.event.type);
-
-  if (canonical === 'PRIVILEGE_ESCALATION' || bert.semanticEventType === 'privilege_change') {
-    return 'Privilege Escalation';
-  }
-  if (event.network?.knownC2Pattern) {
-    return 'Lateral Movement';
-  }
-  if (canonical === 'LOGIN_ATTEMPT' &&
-      (bert.semanticEventType === 'authentication_failure' || (event.temporal?.recentFailures ?? 0) > 0)) {
-    return 'Initial Access';
-  }
-  if (event.precedingSignals?.privilegeAttemptsObserved) {
-    return 'Persistence';
-  }
-
-  // AI fallback
-  return await inferAttackStageWithAI(event);
-}
 
 /* ======================================================
-   CORE FLOW
+   FLOW
 ====================================================== */
+
 export const analyzeThreatFlow = ai.defineFlow(
   {
     name: 'analyzeThreatFlow',
@@ -109,51 +81,46 @@ export const analyzeThreatFlow = ai.defineFlow(
   },
   async (event): Promise<UnifiedThreatAnalysisOutput> => {
     console.log('=== ThreatLens AI Flow Started ===');
-    console.log('Event Received:', JSON.stringify(event, null, 2));
 
-    // 1️⃣ Run BERT semantic analysis
-    console.log('\n[Step 1] Running BERT semantic analysis...');
+    // 1️⃣ Semantic
     const bertSignals = await runBertSemanticAnalysis(event.event.details);
-    console.log('BERT Signals:', bertSignals);
 
-    // 2️⃣ Query IP reputation
-    console.log('\n[Step 2] Querying AbuseIPDB...');
+    // 2️⃣ IP reputation
     const ipReputationScore = await queryAbuseIPDB(event.location.ip);
-    console.log('IP Reputation Score:', ipReputationScore);
 
-    // 3️⃣ Compute behavioral anomaly
-    console.log('\n[Step 3] Computing behavioral anomaly score...');
+    // 3️⃣ Behavioral
     const behavioralAnomalyScore = computeBehavioralScore(event, bertSignals);
-    console.log('Behavioral Anomaly Score:', behavioralAnomalyScore);
 
-    // 4️⃣ Risk breakdown and aggregate score
-    console.log('\n[Step 4] Computing risk breakdown...');
-    const riskBreakdown = computeRiskBreakdown(event, behavioralAnomalyScore, ipReputationScore);
-    const riskScore = aggregateRisk(riskBreakdown);
-    console.log('Risk Breakdown:', riskBreakdown);
-    console.log('Aggregated Risk Score:', riskScore);
+    // 4️⃣ Risk
+    const riskBreakdown = computeRiskBreakdown(
+      event,
+      behavioralAnomalyScore,
+      ipReputationScore
+    );
 
-    // 5️⃣ Determine attack stage with AI fallback
-    console.log('\n[Step 5] Inferring attack stage...');
+    const riskScore = aggregateRisk(riskBreakdown, event);
+
+    // 5️⃣ Attack stage
     const attackStage = await inferAttackStage(event, bertSignals);
-    console.log('Attack Stage:', attackStage);
 
-    // 6️⃣ Build attack chain
-    console.log('\n[Step 6] Building attack chain...');
+    // 6️⃣ Chain
     const attackChain = buildAttackChain(event, attackStage);
-    console.log('Attack Chain:', attackChain.join(' → '));
 
-    // 7️⃣ Calibrate confidence
-    console.log('\n[Step 7] Calibrating confidence...');
-    const confidence = calibrateConfidence(event, bertSignals, behavioralAnomalyScore);
-    console.log('Confidence:', confidence);
+    // 7️⃣ Confidence
+    const confidence = calibrateConfidence(
+      event,
+      bertSignals,
+      behavioralAnomalyScore
+    );
 
-    // 8️⃣ Build explanations
-    console.log('\n[Step 8] Building explanations...');
-    const explanations = buildExplanations(event, bertSignals, riskScore, attackStage, behavioralAnomalyScore);
-    console.log('Explanations:', explanations);
-
-    console.log('\n=== ThreatLens AI Flow Completed ===\n');
+    // 8️⃣ Explanation
+    const explanations = buildExplanations(
+      event,
+      bertSignals,
+      riskScore,
+      attackStage,
+      behavioralAnomalyScore
+    );
 
     return {
       riskScore,
@@ -173,149 +140,176 @@ export const analyzeThreatFlow = ai.defineFlow(
 );
 
 /* ======================================================
-   NORMALIZATION
+   CORE LOGIC
 ====================================================== */
-function normalizeEventType(raw: EnrichedEvent['event']['type']): CanonicalEventType {
-  switch (raw) {
-    case 'Privilege Escalation':
-      return 'PRIVILEGE_ESCALATION';
-    case 'Login Attempt':
-      return 'LOGIN_ATTEMPT';
-    case 'API Call':
-      return 'API_CALL';
-    case 'Resource Access':
-      return 'RESOURCE_ACCESS';
-    case 'Network Connection':
-      return 'NETWORK_CONNECTION';
-    default:
-      return 'UNKNOWN';
-  }
-}
 
-/* ======================================================
-   BEHAVIORAL INTELLIGENCE
-====================================================== */
-function computeBehavioralScore(event: EnrichedEvent, bert: BertSemanticSignals): number {
+function computeBehavioralScore(
+  event: EnrichedEvent,
+  bert: BertSemanticSignals
+): number {
   let score = 0;
+
   if (event.device.isNovel) score += 0.15;
   if (event.location.isNovel) score += 0.15;
   if (event.temporal?.isOffHours) score += 0.1;
-  if (event.actorCapabilities?.attemptedPrivilege &&
-      event.actorCapabilities.allowedPrivilege !== event.actorCapabilities.attemptedPrivilege) {
-    score += 0.45;
+
+  // critical fix
+  if (
+    event.event.type === 'Privilege Escalation' ||
+    bert.semanticEventType === 'privilege_change'
+  ) {
+    score += 0.5;
   }
-  if ((event.temporal?.recentFailures ?? 0) >= 3) score += 0.15;
+
+  if ((event.temporal?.recentFailures ?? 0) >= 3) score += 0.2;
   if (event.network?.knownC2Pattern) score += 0.3;
-  if (bert.targetPrivilege === 'high') score += 0.1;
+
   return Math.min(score, 1);
 }
 
-/* ======================================================
-   RISK COMPUTATION
-====================================================== */
-function computeRiskBreakdown(event: EnrichedEvent, behavioralScore: number, ipReputation: number) {
+function computeRiskBreakdown(
+  event: EnrichedEvent,
+  behavioralScore: number,
+  ipReputation: number
+) {
   const ruleBased = event.ruleBasedSeverity * 10;
-  const contextual = (event.device.isNovel ? 10 : 0) +
-                     (event.location.isNovel ? 10 : 0) +
-                     (event.temporal?.isOffHours ? 5 : 0) +
-                     (ipReputation > 50 ? 10 : 0);
+
+  const contextual =
+    (event.device.isNovel ? 10 : 0) +
+    (event.location.isNovel ? 10 : 0) +
+    (event.temporal?.isOffHours ? 5 : 0) +
+    (ipReputation > 50 ? 10 : 0);
+
   const behavioral = Math.round(behavioralScore * 100);
+
   return { ruleBased, contextual, behavioral };
 }
 
-function aggregateRisk(b: { ruleBased: number; contextual: number; behavioral: number }) {
-  return Math.min(Math.round(b.ruleBased * 0.45 + b.behavioral * 0.35 + b.contextual * 0.2), 100);
-}
+function aggregateRisk(
+  b: { ruleBased: number; contextual: number; behavioral: number },
+  event: EnrichedEvent
+) {
+  let score = Math.round(
+    b.ruleBased * 0.45 +
+      b.behavioral * 0.35 +
+      b.contextual * 0.2
+  );
 
-async function inferAttackStageWithAI(event: EnrichedEvent): Promise<AttackStage> {
-  const prompt = `
-Infer the MITRE ATT&CK stage for the following event.
-Return ONLY one of:
-Reconnaissance
-Initial Access
-Privilege Escalation
-Lateral Movement
-Persistence
-Unknown
-
-Event:
-${JSON.stringify(event, null, 2)}
-`;
-
-  try {
-    // Pass just the prompt as a string
-    const res = await ai.generate(prompt);
-
-    const t = res.text?.trim();
-    const allowed: AttackStage[] = [
-      'Reconnaissance',
-      'Initial Access',
-      'Privilege Escalation',
-      'Lateral Movement',
-      'Persistence',
-      'Unknown'
-    ];
-    return allowed.includes(t as AttackStage) ? (t as AttackStage) : 'Unknown';
-  } catch (err) {
-    console.error('[inferAttackStageWithAI] AI fallback failed:', err);
-    return 'Unknown';
+  // hard rule
+  if (event.event.type === 'Privilege Escalation') {
+    score = Math.max(score, 75);
   }
+
+  return Math.min(score, 100);
 }
 
+async function inferAttackStage(
+  event: EnrichedEvent,
+  bert: BertSemanticSignals
+): Promise<AttackStage> {
+  if (
+    event.event.type === 'Privilege Escalation' ||
+    bert.semanticEventType === 'privilege_change'
+  ) {
+    return 'Privilege Escalation';
+  }
 
+  if (event.network?.knownC2Pattern) return 'Lateral Movement';
 
+  if (bert.semanticEventType === 'authentication_failure') {
+    return 'Initial Access';
+  }
 
-/* ======================================================
-   ATTACK CHAIN
-====================================================== */
-function buildAttackChain(event: EnrichedEvent, stage: AttackStage): AttackStage[] {
+  return 'Unknown';
+}
+
+function buildAttackChain(
+  event: EnrichedEvent,
+  stage: AttackStage
+): AttackStage[] {
   const chain: AttackStage[] = [];
-  if ((event.temporal?.recentFailures ?? 0) > 0) chain.push('Initial Access');
-  if (event.actorCapabilities?.attemptedPrivilege &&
-      event.actorCapabilities.allowedPrivilege !== event.actorCapabilities.attemptedPrivilege) chain.push('Privilege Escalation');
-  if (event.network?.knownC2Pattern) chain.push('Lateral Movement');
-  if (event.precedingSignals?.privilegeAttemptsObserved) chain.push('Persistence');
-  if (chain.length === 0) chain.push(stage);
+
+  if (stage === 'Privilege Escalation') {
+    chain.push('Initial Access');
+  }
+
+  chain.push(stage);
+
+  if (event.network?.knownC2Pattern) {
+    chain.push('Lateral Movement');
+  }
+
   return [...new Set(chain)];
 }
 
-/* ======================================================
-   CONFIDENCE
-====================================================== */
-function calibrateConfidence(event: EnrichedEvent, bert: BertSemanticSignals, behavioralScore: number) {
+function calibrateConfidence(
+  event: EnrichedEvent,
+  bert: BertSemanticSignals,
+  behavioralScore: number
+) {
   let score = 60;
+
   score += Math.round(bert.confidence * 20);
-  score += behavioralScore > 0.4 ? 10 : 0;
-  score += event.ruleBasedSeverity >= 7 ? 10 : 0;
+
+  if (bert.semanticEventType === 'privilege_change') {
+    score += 10;
+  }
+
+  if (behavioralScore > 0.4) score += 10;
+  if (event.ruleBasedSeverity >= 7) score += 10;
+
   score = Math.min(score, 95);
+
   return {
     confidenceScore: score,
-    confidenceExplanation: score >= 80
-      ? 'Assessment is supported by explicit security-relevant behavior.'
-      : 'Assessment is based on limited corroborating signals.',
+    confidenceExplanation:
+      score >= 80
+        ? 'Strong multi-signal correlation.'
+        : 'Moderate confidence based on partial signals.',
   };
 }
 
-/* ======================================================
-   EXPLANATIONS
-====================================================== */
-function buildExplanations(_event: EnrichedEvent, bert: BertSemanticSignals, riskScore: number, stage: AttackStage, behavioralScore: number) {
-  const behavioral = behavioralScore > 0.4
-    ? 'The activity violates expected role behavior.'
-    : 'The activity aligns with historical behavior.';
-  const detailed = `Detected ${bert.semanticEventType} mapped to ${stage}. Final risk score ${riskScore}.`;
+function buildExplanations(
+  event: EnrichedEvent,
+  bert: BertSemanticSignals,
+  riskScore: number,
+  stage: AttackStage,
+  behavioralScore: number
+) {
+  const behavioral =
+    behavioralScore > 0.4
+      ? 'Behavior deviates from expected baseline.'
+      : 'Behavior aligns with baseline.';
+
+  let detailed = '';
+
+  if (stage === 'Privilege Escalation') {
+    detailed = `Privilege escalation attempt detected for ${event.user.id}. This indicates a high-risk action with potential system-wide impact. Final risk score ${riskScore}.`;
+  } else {
+    detailed = `Event classified as ${stage}. Final risk score ${riskScore}.`;
+  }
+
   return { behavioral, detailed };
 }
 
 /* ======================================================
-   ABUSEIPDB
+   ABUSE IP
 ====================================================== */
+
 async function queryAbuseIPDB(ip: string): Promise<number> {
   try {
-    const res = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}`, {
-      headers: { Key: process.env.ABUSEIPDB_KEY!, Accept: 'application/json' },
-    });
+    const res = await fetch(
+      `https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}`,
+      {
+        headers: {
+          Key: process.env.ABUSEIPDB_KEY!,
+          Accept: 'application/json',
+        },
+      }
+    );
+
     const json: any = await res.json();
+
     return typeof json?.data?.abuseConfidenceScore === 'number'
       ? Math.min(100, json.data.abuseConfidenceScore)
       : 0;

@@ -62,7 +62,7 @@ export function Navbar() {
       >
         <Link href="/" className="flex items-center gap-2 pr-4 border-r border-border">
           <ShieldHalf className="h-5 w-5 text-primary" />
-          <span className="font-bold text-sm">ThreatX</span>
+          <span className="font-bold text-sm">AttackWeaver</span>
         </Link>
 
         {navItems.map((item) => {
